@@ -36,3 +36,17 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.vscode/settings.json")
         COMMAND py compile_commands_change.py ${CMAKE_BUILD_TYPE}
     )
 endif()
+
+if (WIN32)
+    execute_process(
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/scripts
+        COMMAND_ECHO STDOUT
+        COMMAND compile_shaders.bat
+    )
+elseif(UNIX)
+    execute_process(
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/scripts
+        COMMAND_ECHO STDOUT
+        COMMAND ./compile_shaders.sh
+    )
+endif()

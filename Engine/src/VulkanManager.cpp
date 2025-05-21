@@ -4,9 +4,11 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <filesystem>
 
 #include "Engine/core/Assert.h"
 #include "Engine/core/Debug.h"
+#include "Engine/core/Logging.h"
 #include "Engine/Shader.h"
 
 MLC_NAMESPACE_START
@@ -48,6 +50,8 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateImageViews();
     _CreateRenderPass();
     _CreateGraphicsPipeline();
+
+    MLC_INFO("Vulkan Initialization: Success");
 }
 
 void VulkanManager::ShutDown()
@@ -67,6 +71,8 @@ void VulkanManager::ShutDown()
         _DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, MLC_VULKAN_ALLOCATOR);
     }
     vkDestroyInstance(m_instance, MLC_VULKAN_ALLOCATOR);
+
+    MLC_INFO("Vulkan Deinitialization: Success");
 }
 
 MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
@@ -598,10 +604,12 @@ void VulkanManager::_CreateRenderPass()
 void VulkanManager::_CreateGraphicsPipeline()
 {
     // ----- Programmable stages of the pipeline -----
-
+    
+    std::filesystem::path vertPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_vert.spv";
+    std::filesystem::path fragPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_frag.spv";
     Shader defaultShader(
-        "/home/johnb/Dev/Graphics/MalicEngine/Engine/resources/shaders/bin/default_vert.spv",
-        "/home/johnb/Dev/Graphics/MalicEngine/Engine/resources/shaders/bin/default_frag.spv",
+        vertPath.string(),
+        fragPath.string(),
         m_device
     );
 

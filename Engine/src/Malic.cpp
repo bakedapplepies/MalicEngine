@@ -37,7 +37,6 @@ void MalicEngine::_MainLoop()
 
 void MalicEngine::_ShutDown()
 {
-    m_vulkanManager.ShutDown();
     glfwDestroyWindow(m_window);
     glfwTerminate();
 }

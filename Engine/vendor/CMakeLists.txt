@@ -3,8 +3,10 @@ project(MalicEngine CXX C)
 
 include(ExternalProject)
 
-find_package(ZLIB REQUIRED)
-find_package(X11 REQUIRED)
+if (UNIX)
+    find_package(ZLIB REQUIRED)
+    find_package(X11 REQUIRED)
+endif()
 
 set(GLFW_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern/glfw CACHE INTERNAL "")
 message("${GLFW_INSTALL_DIR}")

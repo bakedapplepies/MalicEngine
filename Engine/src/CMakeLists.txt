@@ -4,6 +4,7 @@ project(MalicEngine CXX C)
 add_library(LMalicEngine
     core/Debug.cpp
     core/Defines.cpp
+    core/Logging.cpp
     VulkanManager.cpp
     Shader.cpp
     Malic.cpp
@@ -27,7 +28,8 @@ if (WIN32)
         glfw3
         glm
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
-        vulkan-1
+        # vulkan-1
+        Vulkan::Vulkan
     )
 endif()
         
