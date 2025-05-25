@@ -10,23 +10,6 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
 endif()
 
 add_subdirectory(Engine)
-add_subdirectory(Client)
-
-# Build-type configurations
-if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    add_compile_options(-O0 -fsanitize=address -g)
-
-elseif(${CMAKE_BUILD_TYPE} STREQUAL "Release")
-    add_compile_options(-O3)
-    add_link_options(-O3)
-
-elseif(${CMAKE_BUILD_TYPE} STREQUAL "MinSizeRel")
-    message("MinSizeRel config not supported yet!")
-    
-elseif(${CMAKE_BUILD_TYPE} STREQUAL "RelWithDebInfo")
-    message("RelWithDebInfo config not supported yet!")
-
-endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/.vscode/settings.json")
     message("Altering .vscode/settings.json")
@@ -50,3 +33,5 @@ elseif(UNIX)
         COMMAND ./compile_shaders.sh
     )
 endif()
+
+add_subdirectory(Client)

@@ -33,7 +33,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
         else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
             type = "Performance";
 
-        fmt::print(stderr, "[Validation Layer | {} | {}] {}\n", severity, type, pCallbackData->pMessage);
+        fmt::print(stderr, "[Validation Layer | {} | {}] {}\n\n", severity, type, pCallbackData->pMessage);
     }
     return VK_FALSE;
 }

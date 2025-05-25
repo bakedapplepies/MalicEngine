@@ -109,7 +109,7 @@ static void __Log(
     fmt::format_string<Args...> format_str,
     Args&&... args
 ) {
-    fmt::print("[{} ~{}:{}] {}\n",
+    fmt::print("[{} {}:{}] {}\n",
         LOG_LEVELS[static_cast<uint32_t>(log_level)],
         file,
         line,

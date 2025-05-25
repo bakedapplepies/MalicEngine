@@ -45,6 +45,10 @@ public:
     void Init(GLFWwindow* window);
     void ShutDown();
 
+    void WaitAndResetFence();
+    void Present();
+    void WaitIdle();
+
     VulkanManager() = default;
     ~VulkanManager() = default;
 
@@ -67,6 +71,15 @@ private:
     VkRenderPass m_renderPass;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_graphicsPipeline;
+
+    std::vector<VkFramebuffer> m_swapChainFramebuffers;
+
+    VkCommandPool m_commandPool;
+    VkCommandBuffer m_commandBuffer;
+
+    VkSemaphore m_imageAvailableSemaphore;
+    VkSemaphore m_renderFinishedSemaphore;
+    VkFence m_inFlightFence;
 
     GLFWwindow* m_window;
 
@@ -110,6 +123,14 @@ private:
 
     // Create "PipelineSettings" struct and pass everything as an argument
     void _CreateGraphicsPipeline();
+
+    void _CreateFramebuffers();
+
+    void _CreateCommandPool();
+    void _CreateCommandBuffer();
+    void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index);
+
+    void _CreateSyncObjects();
 };
 
 MLC_NAMESPACE_END

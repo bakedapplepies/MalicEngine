@@ -31,6 +31,7 @@ private:
     void _WindowInit();
     void _MainLoop();
     void _ShutDown();
+    void _DrawFrame();
 };
 
 MLC_NAMESPACE_END
