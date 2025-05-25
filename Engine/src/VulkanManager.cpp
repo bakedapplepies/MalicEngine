@@ -19,12 +19,13 @@ MLC_NAMESPACE_START
     const bool enableValidationLayers = true;
 #endif
 
-const std::array<const char*, 1> VALIDATION_LAYERS {
+const std::array VALIDATION_LAYERS {
     "VK_LAYER_KHRONOS_validation"  // common validation layers bundled into one
 };
 
-const std::array<const char*, 1> DEVICE_EXTENSIONS {
+const std::array DEVICE_EXTENSIONS {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    // VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
 };
 
 static std::unordered_map<std::string_view, bool> s_supportedExtensions;
@@ -50,12 +51,24 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateImageViews();
     _CreateRenderPass();
     _CreateGraphicsPipeline();
+    _CreateFramebuffers();
+    _CreateCommandPool();
+    _CreateCommandBuffer();
+    _CreateSyncObjects();
 
     MLC_INFO("Vulkan Initialization: Success");
 }
 
 void VulkanManager::ShutDown()
 {
+    vkDestroySemaphore(m_device, m_imageAvailableSemaphore, MLC_VULKAN_ALLOCATOR);
+    vkDestroySemaphore(m_device, m_renderFinishedSemaphore, MLC_VULKAN_ALLOCATOR);
+    vkDestroyFence(m_device, m_inFlightFence, MLC_VULKAN_ALLOCATOR);
+    vkDestroyCommandPool(m_device, m_commandPool, MLC_VULKAN_ALLOCATOR);
+    for (uint32_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+    {
+        vkDestroyFramebuffer(m_device, m_swapChainFramebuffers[i], MLC_VULKAN_ALLOCATOR);
+    }
     vkDestroyPipeline(m_device, m_graphicsPipeline, MLC_VULKAN_ALLOCATOR);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, MLC_VULKAN_ALLOCATOR);
     vkDestroyRenderPass(m_device, m_renderPass, MLC_VULKAN_ALLOCATOR);
@@ -73,6 +86,64 @@ void VulkanManager::ShutDown()
     vkDestroyInstance(m_instance, MLC_VULKAN_ALLOCATOR);
 
     MLC_INFO("Vulkan Deinitialization: Success");
+}
+
+void VulkanManager::WaitAndResetFence()
+{
+    vkWaitForFences(m_device, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(m_device, 1, &m_inFlightFence);
+}
+
+void VulkanManager::Present()
+{
+    uint32_t imageIndex;
+    VkResult result = vkAcquireNextImageKHR(m_device,
+                                            m_swapChain,
+                                            UINT64_MAX,
+                                            m_imageAvailableSemaphore,
+                                            VK_NULL_HANDLE,
+                                            &imageIndex);
+    // MLC_ASSERT(result == VK_SUCCESS, "Failed to acquire swap chain image.");
+
+    vkResetCommandBuffer(m_commandBuffer, 0);
+    _RecordCommandBuffer(m_commandBuffer, imageIndex);
+
+    std::array<VkSemaphore, 1> waitSemaphores = { m_imageAvailableSemaphore };
+    std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    std::array<VkSemaphore, 1> signalSemaphores = { m_renderFinishedSemaphore };
+
+    VkSubmitInfo submitInfo {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = nullptr,
+        .waitSemaphoreCount = waitSemaphores.size(),
+        .pWaitSemaphores = waitSemaphores.data(),
+        .pWaitDstStageMask = waitStages.data(),
+        .commandBufferCount = 1,
+        .pCommandBuffers = &m_commandBuffer,
+        .signalSemaphoreCount = signalSemaphores.size(),
+        .pSignalSemaphores = signalSemaphores.data()
+    };
+
+    result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFence);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to submit draw command buffer to queue.");
+
+    VkPresentInfoKHR presentInfo {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext = nullptr,
+        .waitSemaphoreCount = signalSemaphores.size(),
+        .pWaitSemaphores = signalSemaphores.data(),
+        .swapchainCount = 1,
+        .pSwapchains = &m_swapChain,
+        .pImageIndices = &imageIndex,
+        .pResults = nullptr  // Optional to check for result of every given swap chain
+    };
+
+    vkQueuePresentKHR(m_presentQueue, &presentInfo);
+}
+
+void VulkanManager::WaitIdle()
+{
+    vkDeviceWaitIdle(m_device);
 }
 
 MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
@@ -232,6 +303,7 @@ void VulkanManager::_SetupDebugMessenger()
         .pfnUserCallback = VulkanDebugCallback,
         .pUserData = nullptr
     };
+
     VkResult result = _CreateDebugUtilsMessengerEXT(m_instance,
                                                     &debugMessengerCreateInfo,
                                                     MLC_VULKAN_ALLOCATOR,
@@ -542,6 +614,7 @@ void VulkanManager::_CreateImageViews()
                 .layerCount = 1
             }
         };
+
         VkResult result = vkCreateImageView(m_device,
                                             &imageViewCreateInfo,
                                             MLC_VULKAN_ALLOCATOR,
@@ -582,6 +655,16 @@ void VulkanManager::_CreateRenderPass()
         .pPreserveAttachments = nullptr
     };
 
+    VkSubpassDependency subpassDependency {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dependencyFlags = 0
+    };
+
     VkRenderPassCreateInfo renderPassCreateInfo {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pNext = nullptr,
@@ -590,8 +673,8 @@ void VulkanManager::_CreateRenderPass()
         .pAttachments = &colorAttachment,
         .subpassCount = 1,
         .pSubpasses = &subpass,
-        .dependencyCount = 0,
-        .pDependencies = nullptr
+        .dependencyCount = 1,
+        .pDependencies = &subpassDependency
     };
 
     VkResult result = vkCreateRenderPass(m_device,
@@ -797,6 +880,147 @@ void VulkanManager::_CreateGraphicsPipeline()
     // for the last two parameters
     result = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, MLC_VULKAN_ALLOCATOR, &m_graphicsPipeline);
     MLC_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline.");
+}
+
+void VulkanManager::_CreateFramebuffers()
+{
+    m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
+    
+    for (uint32_t i = 0; i < m_swapChainImageViews.size(); i++)
+    {
+        VkImageView attachment = m_swapChainImageViews[i];
+        VkFramebufferCreateInfo framebufferCreateInfo {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .renderPass = m_renderPass,
+            .attachmentCount = 1,
+            .pAttachments = &attachment,
+            .width = m_swapChainExtent.width,
+            .height = m_swapChainExtent.height,
+            .layers = 1
+        };
+
+        VkResult result = vkCreateFramebuffer(m_device,
+                                              &framebufferCreateInfo,
+                                              MLC_VULKAN_ALLOCATOR,
+                                              &m_swapChainFramebuffers[i]);
+        MLC_ASSERT(result == VK_SUCCESS, "Failed to create framebuffer.");
+    }
+}
+
+void VulkanManager::_CreateCommandPool()
+{
+    VkCommandPoolCreateInfo commandPoolCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = m_queueFamilyIndices.graphicsFamily.value()
+    };
+
+    VkResult result = vkCreateCommandPool(m_device,
+                                          &commandPoolCreateInfo,
+                                          MLC_VULKAN_ALLOCATOR,
+                                          &m_commandPool);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create command pool.");
+}
+
+void VulkanManager::_CreateCommandBuffer()
+{
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = m_commandPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+
+    VkResult result = vkAllocateCommandBuffers(m_device, &cmdBufferAllocInfo, &m_commandBuffer);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate command buffers.");
+}
+
+void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index)
+{
+    VkCommandBufferBeginInfo beginInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .pInheritanceInfo = nullptr  // optional
+    };
+
+    VkResult result = vkBeginCommandBuffer(command_buffer, &beginInfo);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create command buffer.");
+
+    VkClearValue clearValue {
+        .color = { 0.0f, 0.0f, 0.0f, 1.0f }
+    };
+    VkRenderPassBeginInfo renderPassBeginInfo {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext = nullptr,
+        .renderPass = m_renderPass,
+        .framebuffer = m_swapChainFramebuffers[swch_image_index],
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = m_swapChainExtent
+        },
+        .clearValueCount = 1,
+        .pClearValues = &clearValue
+    };
+    vkCmdBeginRenderPass(command_buffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+
+    VkViewport viewport {
+        .x = 0,
+        .y = 0,
+        .width = static_cast<float>(m_swapChainExtent.width),
+        .height = static_cast<float>(m_swapChainExtent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+    VkRect2D scissor {
+        .offset = { 0, 0 },
+        .extent = m_swapChainExtent
+    };
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(command_buffer);
+
+    result = vkEndCommandBuffer(command_buffer);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to record command buffer.");
+}
+
+void VulkanManager::_CreateSyncObjects()
+{
+    VkSemaphoreCreateInfo semaphoreCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0  
+    };
+    VkFenceCreateInfo fenceCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+
+    bool result;
+    result = vkCreateSemaphore(m_device,
+                               &semaphoreCreateInfo,
+                               MLC_VULKAN_ALLOCATOR,
+                               &m_imageAvailableSemaphore) == VK_SUCCESS
+          && vkCreateSemaphore(m_device,
+                               &semaphoreCreateInfo,
+                               MLC_VULKAN_ALLOCATOR,
+                               &m_renderFinishedSemaphore) == VK_SUCCESS
+          && vkCreateFence(m_device,
+                           &fenceCreateInfo,
+                           MLC_VULKAN_ALLOCATOR,
+                           &m_inFlightFence) == VK_SUCCESS;
+    MLC_ASSERT(result, "Failed to create sync objects.");
 }
 
 MLC_NAMESPACE_END
