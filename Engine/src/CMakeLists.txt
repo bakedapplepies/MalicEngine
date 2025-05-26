@@ -41,12 +41,12 @@ if (UNIX)
         ${FMT_INSTALL_DIR}/install/lib64
     )
     target_link_libraries(LMalicEngineDeps INTERFACE
-        vulkan
-        glfw
+        Vulkan::Vulkan
+        glfw3
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         dl
         pthread
-        X11
+        # X11
         Xrandr
         Xi
     )

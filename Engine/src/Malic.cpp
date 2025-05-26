@@ -14,6 +14,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    std::vector<int> a {0, -2};
 }
 
 void MalicEngine::Run()

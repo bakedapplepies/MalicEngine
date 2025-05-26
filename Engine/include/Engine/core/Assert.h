@@ -35,5 +35,5 @@
             }                                                                           \
         }                                   
 #else
-#   define MLC_ASSERT(expr)
+#   define MLC_ASSERT(expr, msg)
 #endif

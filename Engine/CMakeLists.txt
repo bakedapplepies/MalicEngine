@@ -27,8 +27,8 @@ target_compile_definitions(LMalicEngine PRIVATE
 
 # Build-type configurations
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    target_compile_options(LMalicEngine PRIVATE -O0 -fsanitize=address -g)
-    target_link_options(LMalicEngine PRIVATE -fsanitize=address -g)
+    target_compile_options(LMalicEngine PRIVATE -O0 -g)
+    target_link_options(LMalicEngine PRIVATE -g)
 
 elseif(${CMAKE_BUILD_TYPE} STREQUAL "Release")
     target_compile_options(LMalicEngine PRIVATE -O3)
