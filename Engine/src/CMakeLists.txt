@@ -28,7 +28,6 @@ if (WIN32)
         glfw3
         glm
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
-        # vulkan-1
         Vulkan::Vulkan
     )
 endif()

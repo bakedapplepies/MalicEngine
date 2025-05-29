@@ -54,7 +54,7 @@ ExternalProject_Add(
     FMT_EXTERN
     PREFIX ${FMT_INSTALL_DIR}
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG 123913715afeb8a437e6388b4473fcc4753e1c9a
+    GIT_TAG befbc5fdb838040b3721d13b59e32edb122f224d
     UPDATE_DISCONNECTED TRUE
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX:PATH=${FMT_INSTALL_DIR}/install

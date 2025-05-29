@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.26.0)
 project(MalicEngine CXX C)
 
 find_package(Vulkan REQUIRED)
-set(VULKAN_LIBS "C:/VulkanSDK/1.4.309.0/Lib" CACHE INTERNAL "")
-set(VULKAN_HEADERS "C:/VulkanSDK/1.4.309.0/Include" CACHE INTERNAL "")
 message("Vulkan Version " ${Vulkan_VERSION})
 
 set(MALIC_HEADERS

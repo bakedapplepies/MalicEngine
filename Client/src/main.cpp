@@ -1,5 +1,4 @@
 #include "Engine/Malic.h"
-#include <pthread.h>
 
 int main()
 {
