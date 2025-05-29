@@ -75,11 +75,11 @@ private:
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
     VkCommandPool m_commandPool;
-    VkCommandBuffer m_commandBuffer;
+    std::vector<VkCommandBuffer> m_commandBuffers;
 
-    VkSemaphore m_imageAvailableSemaphore;
-    VkSemaphore m_renderFinishedSemaphore;
-    VkFence m_inFlightFence;
+    std::vector<VkSemaphore> m_imageAvailableSemaphores;
+    std::vector<VkSemaphore> m_renderFinishedSemaphores;
+    std::vector<VkFence> m_inFlightFences;
 
     GLFWwindow* m_window;
 
@@ -127,7 +127,7 @@ private:
     void _CreateFramebuffers();
 
     void _CreateCommandPool();
-    void _CreateCommandBuffer();
+    void _CreateCommandBuffers();
     void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index);
 
     void _CreateSyncObjects();

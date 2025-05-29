@@ -44,11 +44,10 @@ if (UNIX)
         Vulkan::Vulkan
         glfw3
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
-        dl
-        pthread
-        # X11
-        Xrandr
-        Xi
+        # dl
+        # pthread
+        # Xrandr
+        # Xi
     )
 endif()
 

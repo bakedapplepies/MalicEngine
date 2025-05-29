@@ -8,13 +8,19 @@ MLC_NAMESPACE_START
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 
+#ifndef MLC_ASAN_DETECT_LEAKS
+#   ifdef __cplusplus
+extern "C"
+#   endif
+const char* __asan_default_options() { return "detect_leaks=0"; }
+#endif
+
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-    std::vector<int> a {0, -2};
 }
 
 void MalicEngine::Run()
@@ -40,8 +46,23 @@ void MalicEngine::_WindowInit()
 
 void MalicEngine::_MainLoop()
 {
+    static uint32_t fps = 0;
+    static float timeBegin = glfwGetTime();
+    static float timeTotal = 0.0f;
+    float deltaTime;
     while(!glfwWindowShouldClose(m_window))
     {
+        deltaTime = glfwGetTime() - timeBegin;
+        timeBegin = glfwGetTime();
+        timeTotal += deltaTime;
+        fps++;
+        if (timeTotal >= 1.0f)
+        {
+            fmt::print("FPS: {}\n", fps);
+            fps = 0;
+            timeTotal = 0.0f;
+        }
+
         glfwPollEvents();
         _DrawFrame();
     }
