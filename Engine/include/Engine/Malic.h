@@ -15,6 +15,11 @@
 
 MLC_NAMESPACE_START
 
+struct GLFWSharedResource
+{
+    VulkanManager* vulkanManager = nullptr;
+};
+
 class MalicEngine
 {
 public:
@@ -26,6 +31,7 @@ public:
 private:
     GLFWwindow* m_window;
     VulkanManager m_vulkanManager;
+    GLFWSharedResource m_glfwSharedResource;
 
 private:
     void _WindowInit();

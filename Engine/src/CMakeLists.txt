@@ -6,6 +6,7 @@ add_library(LMalicEngine
     core/Defines.cpp
     core/Logging.cpp
     VulkanManager.cpp
+    VertexArray.cpp
     Shader.cpp
     Malic.cpp
 )

@@ -14,6 +14,7 @@
 #include <GLFW/glfw3native.h>
 
 #include "Engine/core/Defines.h"
+#include "Engine/VertexArray.h"
 
 MLC_NAMESPACE_START
 
@@ -45,9 +46,9 @@ public:
     void Init(GLFWwindow* window);
     void ShutDown();
 
-    void WaitAndResetFence();
     void Present();
     void WaitIdle();
+    void ResizeFramebuffer();
 
     VulkanManager() = default;
     ~VulkanManager() = default;
@@ -75,12 +76,14 @@ private:
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
     VkCommandPool m_commandPool;
+    VertexArray m_vertexArray;
     std::vector<VkCommandBuffer> m_commandBuffers;
 
     std::vector<VkSemaphore> m_imageAvailableSemaphores;
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
     std::vector<VkFence> m_inFlightFences;
 
+    bool m_framebufferResized = false;
     GLFWwindow* m_window;
 
 private:
@@ -127,10 +130,14 @@ private:
     void _CreateFramebuffers();
 
     void _CreateCommandPool();
+    void _CreateVertexBuffer();
     void _CreateCommandBuffers();
     void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index);
 
     void _CreateSyncObjects();
+
+    // Window resize events lead to swap chain recreation
+    void _RecreateSwapChain();
 };
 
 MLC_NAMESPACE_END

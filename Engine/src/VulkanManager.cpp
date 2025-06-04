@@ -52,6 +52,7 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateSwapChain();
     _CreateImageViews();
     _CreateRenderPass();
+    _CreateVertexBuffer();
     _CreateGraphicsPipeline();
     _CreateFramebuffers();
     _CreateCommandPool();
@@ -72,6 +73,8 @@ void VulkanManager::ShutDown()
         vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], MLC_VULKAN_ALLOCATOR);
         vkDestroyFence(m_device, m_inFlightFences[i], MLC_VULKAN_ALLOCATOR);
     }
+    vkDestroySwapchainKHR(m_device, m_swapChain, MLC_VULKAN_ALLOCATOR);
+    m_vertexArray.Deallocate();
     vkDestroyCommandPool(m_device, m_commandPool, MLC_VULKAN_ALLOCATOR);
     for (uint32_t i = 0; i < m_swapChainFramebuffers.size(); i++)
     {
@@ -84,7 +87,6 @@ void VulkanManager::ShutDown()
     {
         vkDestroyImageView(m_device, m_swapChainImageViews[i], MLC_VULKAN_ALLOCATOR);
     }
-    vkDestroySwapchainKHR(m_device, m_swapChain, MLC_VULKAN_ALLOCATOR);
     vkDestroyDevice(m_device, MLC_VULKAN_ALLOCATOR);
     vkDestroySurfaceKHR(m_instance, m_surface, MLC_VULKAN_ALLOCATOR);
     if (enableValidationLayers)
@@ -96,15 +98,12 @@ void VulkanManager::ShutDown()
     MLC_INFO("Vulkan Deinitialization: Success");
 }
 
-static uint32_t currentFrameIndex = 0;
-void VulkanManager::WaitAndResetFence()
-{
-    vkWaitForFences(m_device, 1, &m_inFlightFences[currentFrameIndex], VK_TRUE, UINT64_MAX);
-    vkResetFences(m_device, 1, &m_inFlightFences[currentFrameIndex]);
-}
-
 void VulkanManager::Present()
 {
+    static uint32_t currentFrameIndex = 0;
+
+    vkWaitForFences(m_device, 1, &m_inFlightFences[currentFrameIndex], VK_TRUE, UINT64_MAX);
+    
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(m_device,
                                             m_swapChain,
@@ -112,7 +111,16 @@ void VulkanManager::Present()
                                             m_imageAvailableSemaphores[currentFrameIndex],
                                             VK_NULL_HANDLE,
                                             &imageIndex);
-    // MLC_ASSERT(result == VK_SUCCESS, "Failed to acquire swap chain image.");
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        _RecreateSwapChain();
+    }
+    else
+    {
+        MLC_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR, "Failed to acquire next swap chain image.");
+    }
+
+    vkResetFences(m_device, 1, &m_inFlightFences[currentFrameIndex]);
 
     vkResetCommandBuffer(m_commandBuffers[currentFrameIndex], 0);
     _RecordCommandBuffer(m_commandBuffers[currentFrameIndex], imageIndex);
@@ -147,7 +155,17 @@ void VulkanManager::Present()
         .pResults = nullptr  // Optional to check for result of every given swap chain
     };
 
-    vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized)
+    {
+        m_framebufferResized = false;
+        _RecreateSwapChain();
+    }
+    else
+    {
+        MLC_ASSERT(result == VK_SUCCESS, "Failed to present swap chain image.");
+    }
 
     currentFrameIndex = (currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -155,6 +173,11 @@ void VulkanManager::Present()
 void VulkanManager::WaitIdle()
 {
     vkDeviceWaitIdle(m_device);
+}
+
+void VulkanManager::ResizeFramebuffer()
+{
+    m_framebufferResized = true;
 }
 
 MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
@@ -757,16 +780,16 @@ void VulkanManager::_CreateGraphicsPipeline()
     };
 
     // Vertex input
-    // VkVertexInputBindingDescription
-    // VkVertexInputAttributeDescription
+    VkVertexInputBindingDescription bindingDesc = m_vertexArray.GetBindingDescription();
+    std::array<VkVertexInputAttributeDescription, 2> attribDescs = m_vertexArray.GetAttribDescriptions();
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
-        .vertexBindingDescriptionCount = 0,
-        .pVertexBindingDescriptions = nullptr,
-        .vertexAttributeDescriptionCount = 0,
-        .pVertexAttributeDescriptions = nullptr
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDesc,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attribDescs.size()),
+        .pVertexAttributeDescriptions = attribDescs.data()
     };
 
     // Input assembly
@@ -936,6 +959,30 @@ void VulkanManager::_CreateCommandPool()
     MLC_ASSERT(result == VK_SUCCESS, "Failed to create command pool.");
 }
 
+void VulkanManager::_CreateVertexBuffer()
+{
+    const std::vector<Vertex> vertices {
+        Vertex {
+            .position = { 0.0f, -0.5f, 0.0f },
+            .color = { 1.0f, 0.0f, 0.0f }
+        },
+        Vertex {
+            .position = { 0.5f, 0.5f, 0.0f },
+            .color = { 0.0f, 1.0f, 0.0f }
+        },
+        Vertex {
+            .position = { -0.5f, 0.5f, 0.0f },
+            .color = { 0.0f, 0.0f, 1.0f }
+        }
+    };
+
+    m_vertexArray = VertexArray(m_device,
+                                m_physicalDevice,
+                                0,
+                                { m_queueFamilyIndices.graphicsFamily.value() },
+                                vertices);
+}
+
 void VulkanManager::_CreateCommandBuffers()
 {
     m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -999,7 +1046,11 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    vkCmdDraw(command_buffer, 3, 1, 0, 0);
+    std::array<VkBuffer, 1> vertexBuffers = { m_vertexArray.GetVertexBuffer() };
+    std::array<VkDeviceSize, 1> offsets = { 0 }; 
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());
+
+    vkCmdDraw(command_buffer, 3, 1, 0, 0);  // TODO
 
     vkCmdEndRenderPass(command_buffer);
 
@@ -1045,6 +1096,36 @@ void VulkanManager::_CreateSyncObjects()
                                 &m_renderFinishedSemaphores[i]);
         MLC_ASSERT(result == VK_SUCCESS, "Failed to create sync objects.");
     }
+}
+
+void VulkanManager::_RecreateSwapChain()
+{
+    int width, height;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    while (width == 0 || height == 0)
+    {
+        glfwGetFramebufferSize(m_window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    // This function may be called whilst rendering is happening
+    // so some we need to wait for everything to finish before
+    // recreating the swap chain and its resources
+    vkDeviceWaitIdle(m_device);
+
+    for (uint32_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+    {
+        vkDestroyFramebuffer(m_device, m_swapChainFramebuffers[i], MLC_VULKAN_ALLOCATOR);
+    }
+    for (uint32_t i = 0; i < m_swapChainImageViews.size(); i++)
+    {
+        vkDestroyImageView(m_device, m_swapChainImageViews[i], MLC_VULKAN_ALLOCATOR);
+    }
+    vkDestroySwapchainKHR(m_device, m_swapChain, MLC_VULKAN_ALLOCATOR);
+
+    _CreateSwapChain();
+    _CreateImageViews();
+    _CreateFramebuffers();
 }
 
 MLC_NAMESPACE_END

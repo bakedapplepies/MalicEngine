@@ -19,7 +19,7 @@ public:
     VkShaderModule fragShaderModule;
 
 private:
-    VkDevice m_device;  // TODO: Set up ordered-initializations for scoped
+    const VkDevice& m_device;  // TODO: Set up ordered-initializations for scoped
 
 private:
     MLC_NODISCARD std::vector<char> _ReadFile(std::ifstream& file);
