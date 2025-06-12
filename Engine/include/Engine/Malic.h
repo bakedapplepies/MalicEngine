@@ -29,7 +29,7 @@ public:
     ~MalicEngine() = default;
 
 private:
-    GLFWwindow* m_window;
+    GLFWwindow* m_window = nullptr;
     VulkanManager m_vulkanManager;
     GLFWSharedResource m_glfwSharedResource;
 
@@ -37,7 +37,7 @@ private:
     void _WindowInit();
     void _MainLoop();
     void _ShutDown();
-    void _DrawFrame();
+    void _DrawFrame(const std::vector<VertexArray>& vertex_arrays);
 };
 
 MLC_NAMESPACE_END

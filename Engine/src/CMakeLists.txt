@@ -5,6 +5,7 @@ add_library(LMalicEngine
     core/Debug.cpp
     core/Defines.cpp
     core/Logging.cpp
+    GPUBuffer.cpp
     VulkanManager.cpp
     VertexArray.cpp
     Shader.cpp

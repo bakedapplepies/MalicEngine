@@ -1,3 +1,3 @@
 Things to do:
-- 'VertexArray' class is only described the layout, the buffer was created separately
-    TODO: Unite these two and add stuff like RAII
+- TODO: Make a Renderer that decouples VertexArray class from VulkanManager
+- Exclusive vs Concurrent based on arguments of queue families

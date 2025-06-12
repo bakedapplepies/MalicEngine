@@ -4,90 +4,100 @@
 
 MLC_NAMESPACE_START
 
-VertexArray::VertexArray(const VkDevice& device,
-                         const VkPhysicalDevice& physical_device,
+VertexArray::VertexArray(const VulkanManager* vulkan_manager,
                          uint32_t binding,
-                         const std::vector<uint32_t>& queue_families,
                          const std::vector<Vertex>& vertices)
-    : m_device(device), m_binding(binding)
+    : m_vulkanManager(vulkan_manager), m_binding(binding), m_verticesCount(static_cast<uint32_t>(vertices.size()))
 {
-    VkBufferCreateInfo vertexBufferCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .size = sizeof(Vertex) * vertices.size(),  // buffer size is explicitly-defined
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = static_cast<uint32_t>(queue_families.size()),
-        .pQueueFamilyIndices = queue_families.data()
-    };
-
-    VkResult result = vkCreateBuffer(device,
-                                     &vertexBufferCreateInfo,
-                                     MLC_VULKAN_ALLOCATOR,
-                                     &m_vertexBuffer);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to create vertex buffer.");
-
-    VkMemoryRequirements memoryRequirements;
-    vkGetBufferMemoryRequirements(device, m_vertexBuffer, &memoryRequirements);
-
-    VkMemoryAllocateInfo allocInfo {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext = nullptr,
-        .allocationSize = memoryRequirements.size,
-        .memoryTypeIndex = _FindMemoryType(physical_device,
-                                           memoryRequirements.memoryTypeBits,
-                                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-    };
-
-    result = vkAllocateMemory(device, &allocInfo, MLC_VULKAN_ALLOCATOR, &m_bufferMemory);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate vertex buffer memory.");
-
-    VkBindBufferMemoryInfo bindBufferInfo;
-    vkBindBufferMemory(device, m_vertexBuffer, m_bufferMemory, 0);
     // TODO: vkBindBufferMemory2: Bind multiple buffers at once
     // vkBindBufferMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo *pBindInfos)
 
-    void* mappedRegion;
-    vkMapMemory(device, m_bufferMemory, 0, vertexBufferCreateInfo.size, 0, &mappedRegion);
-    memcpy(mappedRegion, vertices.data(), static_cast<size_t>(vertexBufferCreateInfo.size));
-    vkUnmapMemory(device, m_bufferMemory);
+    GPUBuffer stagingBuffer;
+    m_vulkanManager->AllocateBuffer(stagingBuffer,
+                                    vertices.size() * sizeof(Vertex),
+                                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);    
+    m_vulkanManager->AllocateBuffer(m_buffer,
+                                    vertices.size() * sizeof(Vertex),
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_vulkanManager->UploadBuffer(stagingBuffer,
+                                  vertices.data(),
+                                  sizeof(Vertex) * vertices.size());
+    m_vulkanManager->CopyBuffer(stagingBuffer, m_buffer, sizeof(Vertex) * vertices.size());
+    m_vulkanManager->DeallocateBuffer(stagingBuffer);
 }
 
-const VkBuffer& VertexArray::GetVertexBuffer() const
+VertexArray::~VertexArray()
 {
-    return m_vertexBuffer;
+    // Note: When performing move semantics, buffer handles with value VK_NULL_HANDLE
+    // can still be safely called with vkDestroyBuffer, but of course it can't be
+    // used with other functions, which can prevent implicitly ownership of buffers
+    m_vulkanManager->DeallocateBuffer(m_buffer);
 }
 
-void VertexArray::Deallocate() const
+VertexArray::VertexArray(VertexArray&& other) noexcept
 {
-    vkDestroyBuffer(m_device, m_vertexBuffer, MLC_VULKAN_ALLOCATOR);
-    vkFreeMemory(m_device, m_bufferMemory, MLC_VULKAN_ALLOCATOR);
+    other.m_vulkanManager = m_vulkanManager;
+    other.m_binding = m_binding;
+    other.m_verticesCount = m_verticesCount;
+    other.m_buffer = std::move(m_buffer);
+
+    m_vulkanManager = nullptr;
+    m_binding = static_cast<uint32_t>(-1);
+    m_verticesCount = static_cast<uint32_t>(-1);
+}
+
+VertexArray& VertexArray::operator=(VertexArray&& other) noexcept
+{
+    other.m_vulkanManager = m_vulkanManager;
+    other.m_binding = m_binding;
+    other.m_verticesCount = m_verticesCount;
+    other.m_buffer = std::move(m_buffer);
+    
+    m_vulkanManager = nullptr;
+    m_binding = static_cast<uint32_t>(-1);
+    m_verticesCount = static_cast<uint32_t>(-1);
+
+    return *this;
+}
+
+uint32_t VertexArray::GetVerticesCount() const
+{
+    return m_verticesCount;
+}
+
+const GPUBuffer& VertexArray::GetGPUBuffer() const
+{
+    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
+
+    return m_buffer;
 }
 
 VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
 {
+    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
+
     return VkVertexInputBindingDescription {
-        .binding = m_binding,  // m_binding
+        .binding = m_binding,
         .stride = sizeof(Vertex),
-        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX  // can be per instance
     };
 }
 
 std::array<VkVertexInputAttributeDescription, 2> VertexArray::GetAttribDescriptions() const
 {
-    VkVertexInputBindingDescription bindingDesc = GetBindingDescription();
+    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
 
     VkVertexInputAttributeDescription positionAttribDesc {
         .location = 0,
-        .binding = bindingDesc.binding,
+        .binding = m_binding,
         .format = VK_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, position)
     };
     VkVertexInputAttributeDescription colorAttribDesc {
         .location = 1,
-        .binding = bindingDesc.binding,
+        .binding = m_binding,
         .format = VK_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, color)
     };
@@ -96,25 +106,6 @@ std::array<VkVertexInputAttributeDescription, 2> VertexArray::GetAttribDescripti
         positionAttribDesc,
         colorAttribDesc
     };
-}
-
-uint32_t VertexArray::_FindMemoryType(const VkPhysicalDevice& physical_device,
-                                      uint32_t type_filter,
-                                      VkMemoryPropertyFlags properties)
-{
-    VkPhysicalDeviceMemoryProperties memoryProperties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &memoryProperties);
-
-    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
-    {
-        if ((type_filter & (1 << i)) &&
-            (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
-            return i;
-        }
-    }
-    MLC_ASSERT(false, "Failed to find suitable device memory type.");
-    return static_cast<uint32_t>(-1);
 }
 
 MLC_NAMESPACE_END

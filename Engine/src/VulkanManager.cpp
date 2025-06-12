@@ -10,6 +10,7 @@
 #include "Engine/core/Debug.h"
 #include "Engine/core/Logging.h"
 #include "Engine/Shader.h"
+#include "Engine/VertexArray.h"
 
 MLC_NAMESPACE_START
 
@@ -52,10 +53,9 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateSwapChain();
     _CreateImageViews();
     _CreateRenderPass();
-    _CreateVertexBuffer();
-    _CreateGraphicsPipeline();
+    // _CreateGraphicsPipeline();
     _CreateFramebuffers();
-    _CreateCommandPool();
+    _CreateCommandPools();
     _CreateCommandBuffers();
     _CreateSyncObjects();
 
@@ -74,8 +74,8 @@ void VulkanManager::ShutDown()
         vkDestroyFence(m_device, m_inFlightFences[i], MLC_VULKAN_ALLOCATOR);
     }
     vkDestroySwapchainKHR(m_device, m_swapChain, MLC_VULKAN_ALLOCATOR);
-    m_vertexArray.Deallocate();
-    vkDestroyCommandPool(m_device, m_commandPool, MLC_VULKAN_ALLOCATOR);
+    vkDestroyCommandPool(m_device, m_graphicsCmdPool, MLC_VULKAN_ALLOCATOR);
+    vkDestroyCommandPool(m_device, m_transferCmdPool, MLC_VULKAN_ALLOCATOR);
     for (uint32_t i = 0; i < m_swapChainFramebuffers.size(); i++)
     {
         vkDestroyFramebuffer(m_device, m_swapChainFramebuffers[i], MLC_VULKAN_ALLOCATOR);
@@ -98,7 +98,7 @@ void VulkanManager::ShutDown()
     MLC_INFO("Vulkan Deinitialization: Success");
 }
 
-void VulkanManager::Present()
+void VulkanManager::Present(const std::vector<VertexArray>& vertex_arrays)
 {
     static uint32_t currentFrameIndex = 0;
 
@@ -122,8 +122,8 @@ void VulkanManager::Present()
 
     vkResetFences(m_device, 1, &m_inFlightFences[currentFrameIndex]);
 
-    vkResetCommandBuffer(m_commandBuffers[currentFrameIndex], 0);
-    _RecordCommandBuffer(m_commandBuffers[currentFrameIndex], imageIndex);
+    vkResetCommandBuffer(m_graphicsCmdBuffers[currentFrameIndex], 0);
+    _RecordCommandBuffer(m_graphicsCmdBuffers[currentFrameIndex], imageIndex, vertex_arrays);
 
     std::array<VkSemaphore, 1> waitSemaphores = { m_imageAvailableSemaphores[currentFrameIndex] };  // waiting for next image
     std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -136,7 +136,7 @@ void VulkanManager::Present()
         .pWaitSemaphores = waitSemaphores.data(),
         .pWaitDstStageMask = waitStages.data(),
         .commandBufferCount = 1,
-        .pCommandBuffers = &m_commandBuffers[currentFrameIndex],
+        .pCommandBuffers = &m_graphicsCmdBuffers[currentFrameIndex],
         .signalSemaphoreCount = signalSemaphores.size(),
         .pSignalSemaphores = signalSemaphores.data()
     };
@@ -178,6 +178,348 @@ void VulkanManager::WaitIdle()
 void VulkanManager::ResizeFramebuffer()
 {
     m_framebufferResized = true;
+}
+
+void VulkanManager::AllocateBuffer(GPUBuffer& buffer,
+                                   VkDeviceSize size,
+                                   VkBufferUsageFlags usage,
+                                   VkMemoryPropertyFlags properties) const
+{
+    std::vector<uint32_t> queueFamilies {
+        m_queueFamilyIndices.graphicsFamily.value(),
+        m_queueFamilyIndices.transferFamily.value()
+    };
+    VkBufferCreateInfo vertexBufferCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .size = size,  // buffer size is explicitly-defined
+        .usage = usage,
+        .sharingMode = 
+            m_queueFamilyIndices.IsExclusive()
+            ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
+        .queueFamilyIndexCount =
+            m_queueFamilyIndices.IsExclusive()
+            ? 0 : static_cast<uint32_t>(queueFamilies.size()),
+        .pQueueFamilyIndices =
+            m_queueFamilyIndices.IsExclusive()
+            ? nullptr : queueFamilies.data()
+    };
+
+    VkResult result = vkCreateBuffer(m_device,
+                                     &vertexBufferCreateInfo,
+                                     MLC_VULKAN_ALLOCATOR,
+                                     &buffer.m_handle);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create vertex buffer.");
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetBufferMemoryRequirements(m_device, buffer.m_handle, &memoryRequirements);
+
+    VkMemoryAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .allocationSize = memoryRequirements.size,
+        .memoryTypeIndex = _FindMemoryType(memoryRequirements.memoryTypeBits, properties)
+    };
+
+    result = vkAllocateMemory(m_device, &allocInfo, MLC_VULKAN_ALLOCATOR, &buffer.m_memory);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate vertex buffer memory.");
+
+    VkBindBufferMemoryInfo bindBufferInfo;
+    vkBindBufferMemory(m_device, buffer.m_handle, buffer.m_memory, 0);
+}
+
+void VulkanManager::DeallocateBuffer(GPUBuffer& buffer) const
+{
+    MLC_ASSERT(buffer.m_handle != VK_NULL_HANDLE, "Buffer handle is VK_NULL_HANDLE.");
+    MLC_ASSERT(buffer.m_memory != VK_NULL_HANDLE, "Buffer memory is VK_NULL_HANDLE.");
+
+    vkDestroyBuffer(m_device, buffer.m_handle, MLC_VULKAN_ALLOCATOR);
+    buffer.m_handle = VK_NULL_HANDLE;
+    vkFreeMemory(m_device, buffer.m_memory, MLC_VULKAN_ALLOCATOR);
+    buffer.m_memory = VK_NULL_HANDLE;
+}
+
+void VulkanManager::UploadBuffer(const GPUBuffer& buffer, const void* data, size_t size) const
+{
+    void* mappedRegion;
+    vkMapMemory(m_device, buffer.m_memory, 0, size, 0, &mappedRegion);
+    memcpy(mappedRegion, data, size);
+    vkUnmapMemory(m_device, buffer.m_memory);
+}
+
+void VulkanManager::CopyBuffer(const GPUBuffer& src, const GPUBuffer& dst, VkDeviceSize size) const
+{
+    VkCommandBufferAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = m_transferCmdPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+    
+    VkCommandBuffer copyCmdBuffer;
+    VkResult result = vkAllocateCommandBuffers(m_device, &allocInfo, &copyCmdBuffer);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate copy command buffer.");
+
+    VkCommandBufferBeginInfo beginInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = nullptr,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+
+    vkBeginCommandBuffer(copyCmdBuffer, &beginInfo);
+    VkBufferCopy copyRegion {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = size
+    };
+    vkCmdCopyBuffer(copyCmdBuffer, src.m_handle, dst.m_handle, 1, &copyRegion);
+    vkEndCommandBuffer(copyCmdBuffer);
+
+    VkFence fence;
+    CreateFences(&fence, 1, false);
+    VkSubmitInfo submitInfo {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = nullptr,
+        .waitSemaphoreCount = 0,
+        .pWaitSemaphores = nullptr,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &copyCmdBuffer,
+        .signalSemaphoreCount = 0,
+        .pSignalSemaphores = nullptr
+    };
+
+    vkQueueSubmit(m_transferQueue, 1, &submitInfo, fence);
+    vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkFreeCommandBuffers(m_device, m_transferCmdPool, 1, &copyCmdBuffer);
+    DestroyFences(&fence, 1);
+}
+
+void VulkanManager::CreateFences(VkFence* fences, uint32_t amount, bool signaled) const
+{
+    VkResult result;
+    VkFenceCreateInfo createInfo {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u
+    };
+
+    for (uint32_t i = 0; i < amount; i++)
+    {
+        result = vkCreateFence(m_device, &createInfo, MLC_VULKAN_ALLOCATOR, &fences[i]);
+
+        MLC_ASSERT(result == VK_SUCCESS, "Failed to create fence.");
+    }
+}
+
+void VulkanManager::DestroyFences(VkFence* fences, uint32_t amount) const
+{
+    for (uint32_t i = 0; i < amount; i++)
+    {
+        vkDestroyFence(m_device, fences[i], MLC_VULKAN_ALLOCATOR);
+    }
+}
+
+void VulkanManager::CreateGraphicsPipeline(const std::vector<VertexArray>& vertex_arrays)
+{
+    // ----- Programmable stages of the pipeline -----
+    
+    std::filesystem::path vertPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_vert.spv";
+    std::filesystem::path fragPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_frag.spv";
+    Shader defaultShader(
+        vertPath.string(),
+        fragPath.string(),
+        m_device
+    );
+
+    VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = defaultShader.vertShaderModule,
+        .pName = "main",
+        .pSpecializationInfo = nullptr  // this can specify constants inside the shader
+    };
+
+    VkPipelineShaderStageCreateInfo fragShaderStageCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = defaultShader.fragShaderModule,
+        .pName = "main",
+        .pSpecializationInfo = nullptr  // this can specify constants inside the shader
+    };
+
+    VkPipelineShaderStageCreateInfo shaderStages[2] = {
+        vertShaderStageCreateInfo,
+        fragShaderStageCreateInfo
+    };
+
+    // ----- Fixed stages -----
+
+    // Dynamic states
+    std::array<VkDynamicState, 2> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
+    VkPipelineViewportStateCreateInfo viewportStateCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+
+    // Vertex input
+    // TODO
+    VkVertexInputBindingDescription bindingDesc = vertex_arrays[0].GetBindingDescription();
+    std::array<VkVertexInputAttributeDescription, 2> attribDescs = vertex_arrays[0].GetAttribDescriptions();
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDesc,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attribDescs.size()),
+        .pVertexAttributeDescriptions = attribDescs.data()
+    };
+
+    // Input assembly
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .pNext = 0,
+        .flags = 0,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    // Viewport & scissor
+    VkViewport viewport {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(m_swapChainExtent.width),
+        .height = static_cast<float>(m_swapChainExtent.height),
+        .minDepth = 0.0f,  // just normalized depth values (?)
+        .maxDepth = 1.0f
+    };
+    VkRect2D scissor {
+        .offset = { 0, 0 },
+        .extent = m_swapChainExtent
+    };
+
+    // Rasterizer
+    VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .depthClampEnable = VK_FALSE,  // VK_TRUE might be useful for shadow maps
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,  // depth bias may be useful for shadow maps
+        .depthBiasConstantFactor = 0.0f,
+        .depthBiasClamp = 0.0f,
+        .depthBiasSlopeFactor = 0.0f,
+        .lineWidth = 1.0f
+    };
+
+    // Multisampling
+    VkPipelineMultisampleStateCreateInfo multisamplingCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
+        .minSampleShading = 1.0f,
+        .pSampleMask = nullptr,
+        .alphaToCoverageEnable = VK_FALSE,
+        .alphaToOneEnable = VK_FALSE
+    };
+
+    // Depth buffer (later, TODO)
+    // Stencil buffer (later, TODO)
+
+    // Color blending (TODO)
+    VkPipelineColorBlendAttachmentState colorBlendAttachment {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                          VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT |
+                          VK_COLOR_COMPONENT_A_BIT
+    };
+    VkPipelineColorBlendStateCreateInfo colorBlendingCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .logicOpEnable = VK_FALSE,
+        .logicOp = VK_LOGIC_OP_COPY,  // Optional
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment,
+        .blendConstants = { 0.0f, 0.0f, 0.0f, 0.0f }  // Optional
+    };
+
+    // ----- Pipeline Layout -----
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .setLayoutCount = 0,
+        .pSetLayouts = nullptr,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = nullptr
+    };
+
+    VkResult result = vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, MLC_VULKAN_ALLOCATOR, &m_pipelineLayout);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create pipeline layout.");
+
+    // ----- Graphics Pipeline -----
+
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputCreateInfo,
+        .pInputAssemblyState = &inputAssemblyCreateInfo,
+        .pTessellationState = nullptr,
+        .pViewportState = &viewportStateCreateInfo,
+        .pRasterizationState = &rasterizerCreateInfo,
+        .pMultisampleState = &multisamplingCreateInfo,
+        .pDepthStencilState = nullptr,  // Optional
+        .pColorBlendState = &colorBlendingCreateInfo,
+        .pDynamicState = &dynamicStateCreateInfo,
+        .layout = m_pipelineLayout,
+        .renderPass = m_renderPass,
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1
+    };
+    // See https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Conclusion
+    // for the last two parameters
+    result = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, MLC_VULKAN_ALLOCATOR, &m_graphicsPipeline);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline.");
 }
 
 MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
@@ -354,23 +696,55 @@ QueueFamiliesIndices VulkanManager::_FindQueueFamilies(const VkPhysicalDevice& d
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
+    std::vector<VkQueueFlags> queueFamiliesFlags(queueFamilyCount);
+    for (uint32_t i = 0; i < queueFamilyCount; i++)
+    {
+        queueFamiliesFlags[i] = queueFamilies[i].queueFlags;
+    }
+
+    // Find all needed queue families, might just be one family
     for (int i = 0; i < queueFamilyCount; i++)
     {
         uint32_t thisQueueCount = 0;
-        VkBool32 presentSupport = false;
+        VkBool32 presentSupport;
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
         if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && thisQueueCount < queueFamilies[i].queueCount)
         {
             familyIndices.graphicsFamily = i;
-            // thisQueueCount++;
-        }
-        if (presentSupport && thisQueueCount < queueFamilies[i].queueCount)  // might be the same queue family as graphics queues
-        {
-            familyIndices.presentFamily = i;
+            if (presentSupport && thisQueueCount < queueFamilies[i].queueCount)  // might be the same queue family as graphics queues
+            {
+                familyIndices.presentFamily = i;
+            }
+            if (queueFamilies[i].queueFlags & VK_QUEUE_TRANSFER_BIT && thisQueueCount < queueFamilies[i].queueCount)
+            {
+                familyIndices.transferFamily = i;
+            }
         }
 
         // Found all required queue families
         if (familyIndices.IsComplete()) break;
+    }
+
+    // Find other queue families that may be specialized
+    static auto findBestQueueFamilyIndex = [](const std::vector<VkQueueFlags>& queueFamiliesFlags,
+                                       VkQueueFlags targetFlags)
+    {
+        uint32_t index;
+        VkQueueFlags closestBit = VK_QUEUE_FLAG_BITS_MAX_ENUM;
+        for (uint32_t i = 0; i < queueFamiliesFlags.size(); i++)
+        {
+            if (queueFamiliesFlags[i] - targetFlags < closestBit && (queueFamiliesFlags[i] & targetFlags) == targetFlags)
+            {
+                closestBit = queueFamiliesFlags[i] - targetFlags;
+                index = i;
+            }
+        }
+        return index;
+    };
+    uint32_t transferQueueFamilyIndex = findBestQueueFamilyIndex(queueFamiliesFlags, VK_QUEUE_TRANSFER_BIT);
+    if (transferQueueFamilyIndex < queueFamilyCount)
+    {
+        familyIndices.transferFamily = transferQueueFamilyIndex;
     }
 
     return familyIndices;
@@ -468,7 +842,8 @@ void VulkanManager::_CreateLogicalDevice()
     // Repeat values are deduplicated
     const std::set<uint32_t> uniqueQueueFamilies {
         m_queueFamilyIndices.graphicsFamily.value(),
-        m_queueFamilyIndices.presentFamily.value()
+        m_queueFamilyIndices.presentFamily.value(),
+        m_queueFamilyIndices.transferFamily.value()
     };
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -512,6 +887,7 @@ void VulkanManager::_GetQueues()
     // If the graphics and present queues are the same, they'll have the same address
     vkGetDeviceQueue(m_device, m_queueFamilyIndices.graphicsFamily.value(), 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, m_queueFamilyIndices.presentFamily.value(), 0, &m_presentQueue);
+    vkGetDeviceQueue(m_device, m_queueFamilyIndices.transferFamily.value(), 0, &m_transferQueue);
 }
 
 VkExtent2D VulkanManager::_ChooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities)
@@ -570,9 +946,10 @@ void VulkanManager::_CreateSwapChain()
     VkSurfaceFormatKHR surfaceFormat;
     VkPresentModeKHR presentMode;
     uint32_t imageCount;  // how many images in swap chain
-    std::array<uint32_t, 2> queueFamilyIndices {
+    std::array<uint32_t, 3> queueFamilyIndices {
         m_queueFamilyIndices.graphicsFamily.value(),
-        m_queueFamilyIndices.presentFamily.value()
+        m_queueFamilyIndices.presentFamily.value(),
+        m_queueFamilyIndices.transferFamily.value()
     };
     bool graphicsQueueIsPresentQueue = queueFamilyIndices[0] == queueFamilyIndices[1];    
 
@@ -602,7 +979,7 @@ void VulkanManager::_CreateSwapChain()
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,  // TODO: VK_IMAGE_USAGE_TRANSFER_DST_BIT for post-processing
         .imageSharingMode = graphicsQueueIsPresentQueue ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
-        .queueFamilyIndexCount = graphicsQueueIsPresentQueue ? 0u : 2u,
+        .queueFamilyIndexCount = graphicsQueueIsPresentQueue ? 0u : 3u,
         .pQueueFamilyIndices = queueFamilyIndices.data(),
         .preTransform = swapChainSupport.capabilities.currentTransform,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,  // WINDOW opacity, which is interesting
@@ -718,204 +1095,6 @@ void VulkanManager::_CreateRenderPass()
     MLC_ASSERT(result == VK_SUCCESS, "Failed to create render pass.");                                        
 }
 
-void VulkanManager::_CreateGraphicsPipeline()
-{
-    // ----- Programmable stages of the pipeline -----
-    
-    std::filesystem::path vertPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_vert.spv";
-    std::filesystem::path fragPath = std::filesystem::path(MLC_ROOT_DIR) / "Engine/resources/shaders/bin/default_frag.spv";
-    Shader defaultShader(
-        vertPath.string(),
-        fragPath.string(),
-        m_device
-    );
-
-    VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = defaultShader.vertShaderModule,
-        .pName = "main",
-        .pSpecializationInfo = nullptr  // this can specify constants inside the shader
-    };
-
-    VkPipelineShaderStageCreateInfo fragShaderStageCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = defaultShader.fragShaderModule,
-        .pName = "main",
-        .pSpecializationInfo = nullptr  // this can specify constants inside the shader
-    };
-
-    VkPipelineShaderStageCreateInfo shaderStages[2] = {
-        vertShaderStageCreateInfo,
-        fragShaderStageCreateInfo
-    };
-
-    // ----- Fixed stages -----
-
-    // Dynamic states
-    std::array<VkDynamicState, 2> dynamicStates = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
-
-    VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
-        .pDynamicStates = dynamicStates.data()
-    };
-
-    VkPipelineViewportStateCreateInfo viewportStateCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .viewportCount = 1,
-        .scissorCount = 1
-    };
-
-    // Vertex input
-    VkVertexInputBindingDescription bindingDesc = m_vertexArray.GetBindingDescription();
-    std::array<VkVertexInputAttributeDescription, 2> attribDescs = m_vertexArray.GetAttribDescriptions();
-    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &bindingDesc,
-        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attribDescs.size()),
-        .pVertexAttributeDescriptions = attribDescs.data()
-    };
-
-    // Input assembly
-    VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .pNext = 0,
-        .flags = 0,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .primitiveRestartEnable = VK_FALSE
-    };
-
-    // Viewport & scissor
-    VkViewport viewport {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(m_swapChainExtent.width),
-        .height = static_cast<float>(m_swapChainExtent.height),
-        .minDepth = 0.0f,  // just normalized depth values (?)
-        .maxDepth = 1.0f
-    };
-    VkRect2D scissor {
-        .offset = { 0, 0 },
-        .extent = m_swapChainExtent
-    };
-
-    // Rasterizer
-    VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .depthClampEnable = VK_FALSE,  // VK_TRUE might be useful for shadow maps
-        .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .depthBiasEnable = VK_FALSE,  // depth bias may be useful for shadow maps
-        .depthBiasConstantFactor = 0.0f,
-        .depthBiasClamp = 0.0f,
-        .depthBiasSlopeFactor = 0.0f,
-        .lineWidth = 1.0f
-    };
-
-    // Multisampling
-    VkPipelineMultisampleStateCreateInfo multisamplingCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-        .sampleShadingEnable = VK_FALSE,
-        .minSampleShading = 1.0f,
-        .pSampleMask = nullptr,
-        .alphaToCoverageEnable = VK_FALSE,
-        .alphaToOneEnable = VK_FALSE
-    };
-
-    // Depth buffer (later, TODO)
-    // Stencil buffer (later, TODO)
-
-    // Color blending (TODO)
-    VkPipelineColorBlendAttachmentState colorBlendAttachment {
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = VK_BLEND_OP_ADD,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                          VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT |
-                          VK_COLOR_COMPONENT_A_BIT
-    };
-    VkPipelineColorBlendStateCreateInfo colorBlendingCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .logicOpEnable = VK_FALSE,
-        .logicOp = VK_LOGIC_OP_COPY,  // Optional
-        .attachmentCount = 1,
-        .pAttachments = &colorBlendAttachment,
-        .blendConstants = { 0.0f, 0.0f, 0.0f, 0.0f }  // Optional
-    };
-
-    // ----- Pipeline Layout -----
-
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .setLayoutCount = 0,
-        .pSetLayouts = nullptr,
-        .pushConstantRangeCount = 0,
-        .pPushConstantRanges = nullptr
-    };
-    VkResult result = vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, MLC_VULKAN_ALLOCATOR, &m_pipelineLayout);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to create pipeline layout.");
-
-    // ----- Graphics Pipeline -----
-
-    VkGraphicsPipelineCreateInfo pipelineCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .stageCount = 2,
-        .pStages = shaderStages,
-        .pVertexInputState = &vertexInputCreateInfo,
-        .pInputAssemblyState = &inputAssemblyCreateInfo,
-        .pTessellationState = nullptr,
-        .pViewportState = &viewportStateCreateInfo,
-        .pRasterizationState = &rasterizerCreateInfo,
-        .pMultisampleState = &multisamplingCreateInfo,
-        .pDepthStencilState = nullptr,  // Optional
-        .pColorBlendState = &colorBlendingCreateInfo,
-        .pDynamicState = &dynamicStateCreateInfo,
-        .layout = m_pipelineLayout,
-        .renderPass = m_renderPass,
-        .subpass = 0,
-        .basePipelineHandle = VK_NULL_HANDLE,
-        .basePipelineIndex = -1
-    };
-    // See https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Conclusion
-    // for the last two parameters
-    result = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, MLC_VULKAN_ALLOCATOR, &m_graphicsPipeline);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline.");
-}
-
 void VulkanManager::_CreateFramebuffers()
 {
     m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
@@ -943,63 +1122,66 @@ void VulkanManager::_CreateFramebuffers()
     }
 }
 
-void VulkanManager::_CreateCommandPool()
+void VulkanManager::_CreateCommandPools()
 {
-    VkCommandPoolCreateInfo commandPoolCreateInfo {
+    VkCommandPoolCreateInfo graphicsCmdPoolCreateInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext = nullptr,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = m_queueFamilyIndices.graphicsFamily.value()
     };
 
-    VkResult result = vkCreateCommandPool(m_device,
-                                          &commandPoolCreateInfo,
-                                          MLC_VULKAN_ALLOCATOR,
-                                          &m_commandPool);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to create command pool.");
-}
-
-void VulkanManager::_CreateVertexBuffer()
-{
-    const std::vector<Vertex> vertices {
-        Vertex {
-            .position = { 0.0f, -0.5f, 0.0f },
-            .color = { 1.0f, 0.0f, 0.0f }
-        },
-        Vertex {
-            .position = { 0.5f, 0.5f, 0.0f },
-            .color = { 0.0f, 1.0f, 0.0f }
-        },
-        Vertex {
-            .position = { -0.5f, 0.5f, 0.0f },
-            .color = { 0.0f, 0.0f, 1.0f }
-        }
+    VkCommandPoolCreateInfo transferCmdPoolCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = m_queueFamilyIndices.transferFamily.value()
     };
 
-    m_vertexArray = VertexArray(m_device,
-                                m_physicalDevice,
-                                0,
-                                { m_queueFamilyIndices.graphicsFamily.value() },
-                                vertices);
+    VkResult result;
+    result = vkCreateCommandPool(m_device,
+                                 &graphicsCmdPoolCreateInfo,
+                                 MLC_VULKAN_ALLOCATOR,
+                                 &m_graphicsCmdPool);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create Graphics command pool.");
+    result = vkCreateCommandPool(m_device,
+                                 &transferCmdPoolCreateInfo,
+                                 MLC_VULKAN_ALLOCATOR,
+                                 &m_transferCmdPool);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create Transfer command pool.");
 }
 
 void VulkanManager::_CreateCommandBuffers()
 {
-    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    m_graphicsCmdBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    m_transferCmdBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
-    VkCommandBufferAllocateInfo cmdBufferAllocInfo {
+    VkCommandBufferAllocateInfo graphicsCmdBufferAllocInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = nullptr,
-        .commandPool = m_commandPool,
+        .commandPool = m_graphicsCmdPool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size())
+        .commandBufferCount = static_cast<uint32_t>(m_graphicsCmdBuffers.size())
     };
 
-    VkResult result = vkAllocateCommandBuffers(m_device, &cmdBufferAllocInfo, m_commandBuffers.data());
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate command buffers.");
+    VkCommandBufferAllocateInfo transferCmdBufferAllocInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = m_transferCmdPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = static_cast<uint32_t>(m_transferCmdBuffers.size())
+    };
+
+    VkResult result;
+    result = vkAllocateCommandBuffers(m_device, &graphicsCmdBufferAllocInfo, m_graphicsCmdBuffers.data());
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate Graphics command buffers.");
+    result = vkAllocateCommandBuffers(m_device, &transferCmdBufferAllocInfo, m_transferCmdBuffers.data());
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate Transfer command buffers.");
 }
 
-void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index)
+void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer,
+                                         uint32_t swch_image_index,
+                                         const std::vector<VertexArray>& vertex_arrays)
 {
     VkCommandBufferBeginInfo beginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1046,11 +1228,11 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    std::array<VkBuffer, 1> vertexBuffers = { m_vertexArray.GetVertexBuffer() };
+    std::array<VkBuffer, 1> vertexBuffers = { vertex_arrays[0].GetGPUBuffer().m_handle };
     std::array<VkDeviceSize, 1> offsets = { 0 }; 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());
 
-    vkCmdDraw(command_buffer, 3, 1, 0, 0);  // TODO
+    vkCmdDraw(command_buffer, vertex_arrays[0].GetVerticesCount(), 1, 0, 0);  // TODO
 
     vkCmdEndRenderPass(command_buffer);
 
@@ -1079,13 +1261,13 @@ void VulkanManager::_CreateSyncObjects()
     {
         bool result;
         result = vkCreateSemaphore(m_device,
-                                &semaphoreCreateInfo,
-                                MLC_VULKAN_ALLOCATOR,
-                                &m_imageAvailableSemaphores[i]) == VK_SUCCESS
+                                   &semaphoreCreateInfo,
+                                   MLC_VULKAN_ALLOCATOR,
+                                   &m_imageAvailableSemaphores[i]) == VK_SUCCESS
               && vkCreateFence(m_device,
-                            &fenceCreateInfo,
-                            MLC_VULKAN_ALLOCATOR,
-                            &m_inFlightFences[i]) == VK_SUCCESS;
+                               &fenceCreateInfo,
+                               MLC_VULKAN_ALLOCATOR,
+                               &m_inFlightFences[i]) == VK_SUCCESS;
         MLC_ASSERT(result, "Failed to create sync objects.");
     }
     for (uint32_t i = 0; i < m_swapChainImages.size(); i++)
@@ -1126,6 +1308,23 @@ void VulkanManager::_RecreateSwapChain()
     _CreateSwapChain();
     _CreateImageViews();
     _CreateFramebuffers();
+}
+
+uint32_t VulkanManager::_FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const
+{
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memoryProperties);
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+    {
+        if ((type_filter & (1 << i)) &&
+            (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+    MLC_ASSERT(false, "Failed to find suitable device memory type.");
+    return static_cast<uint32_t>(-1);
 }
 
 MLC_NAMESPACE_END

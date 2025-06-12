@@ -2,6 +2,7 @@
 
 #include <Engine/core/Assert.h>
 #include <Engine/core/Debug.h>
+#include <Engine/VertexArray.h>
 
 MLC_NAMESPACE_START
 
@@ -42,7 +43,8 @@ void MalicEngine::Run()
 {
     _WindowInit();
     m_vulkanManager.Init(m_window);
-    _MainLoop();
+    // TODO: Feed stuff from Client here
+    _MainLoop();  // Everything has to live & die inside this Loop to ensure proper resource management
     m_vulkanManager.ShutDown();
     _ShutDown();
 }
@@ -69,6 +71,29 @@ void MalicEngine::_MainLoop()
     static float timeBegin = glfwGetTime();
     static float timeTotal = 0.0f;
     float deltaTime;
+
+    const std::vector<Vertex> vertices {
+        Vertex {
+            .position = { 0.0f, -0.5f, 0.0f },
+            .color = { 1.0f, 1.0f, 1.0f }
+        },
+        Vertex {
+            .position = { 0.5f, 0.5f, 0.0f },
+            .color = { 0.0f, 1.0f, 0.0f }
+        },
+        Vertex {
+            .position = { -0.5f, 0.5f, 0.0f },
+            .color = { 0.0f, 0.0f, 1.0f }
+        }
+    };
+
+    // VertexArray vertexArray(&m_vulkanManager, 0, vertices);
+
+    std::vector<VertexArray> vertexArrays;
+    vertexArrays.emplace_back(&m_vulkanManager, 0, vertices);
+
+    m_vulkanManager.CreateGraphicsPipeline(vertexArrays);
+
     while(!glfwWindowShouldClose(m_window))
     {
         deltaTime = glfwGetTime() - timeBegin;
@@ -83,8 +108,11 @@ void MalicEngine::_MainLoop()
         }
 
         glfwPollEvents();
-        _DrawFrame();
+        _DrawFrame(vertexArrays);
     }
+
+    // All non-vulkan-initialization objects live here,
+    // so wait for them to finish being used
     m_vulkanManager.WaitIdle();
 }
 
@@ -94,9 +122,9 @@ void MalicEngine::_ShutDown()
     glfwTerminate();
 }
 
-void MalicEngine::_DrawFrame()
+void MalicEngine::_DrawFrame(const std::vector<VertexArray>& vertex_arrays)
 {
-    m_vulkanManager.Present();
+    m_vulkanManager.Present(vertex_arrays);
 }
 
 MLC_NAMESPACE_END

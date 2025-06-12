@@ -14,7 +14,7 @@
 #include <GLFW/glfw3native.h>
 
 #include "Engine/core/Defines.h"
-#include "Engine/VertexArray.h"
+#include "Engine/GPUBuffer.h"
 
 MLC_NAMESPACE_START
 
@@ -22,10 +22,17 @@ struct QueueFamiliesIndices
 {
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
+    std::optional<uint32_t> transferFamily;
 
     bool IsComplete() const
     {
-        return graphicsFamily.has_value() && presentFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value() && transferFamily.has_value();
+    }
+
+    bool IsExclusive() const
+    {
+        return graphicsFamily.value() == presentFamily.value()
+            && graphicsFamily.value() == transferFamily.value();
     }
 };
 
@@ -40,18 +47,34 @@ struct SwapChainSupportDetails
     // presentModes: available present modes
 };
 
+class VertexArray;
 class VulkanManager
 {
 public:
+    VulkanManager() = default;
+    ~VulkanManager() = default;
+    VulkanManager(const VulkanManager&) = delete;
+    VulkanManager& operator=(const VulkanManager&) = delete;
+
     void Init(GLFWwindow* window);
     void ShutDown();
 
-    void Present();
+    void Present(const std::vector<VertexArray>& vertex_arrays);
     void WaitIdle();
     void ResizeFramebuffer();
+    
+    void AllocateBuffer(GPUBuffer& buffer,
+                        VkDeviceSize size,
+                        VkBufferUsageFlags usage,
+                        VkMemoryPropertyFlags properties) const;
+    void DeallocateBuffer(GPUBuffer& buffer) const;
+    void UploadBuffer(const GPUBuffer& buffer, const void* data, size_t size) const;
+    void CopyBuffer(const GPUBuffer& src, const GPUBuffer& dst, VkDeviceSize size) const;
+    void CreateFences(VkFence* fences, uint32_t amount, bool signaled = false) const;
+    void DestroyFences(VkFence* fences, uint32_t amount) const;
 
-    VulkanManager() = default;
-    ~VulkanManager() = default;
+    // Create "PipelineSettings" struct and pass everything as an argument
+    void CreateGraphicsPipeline(const std::vector<VertexArray>& vertex_arrays);
 
 private:
     VkInstance m_instance = VK_NULL_HANDLE;
@@ -62,22 +85,24 @@ private:
     VkDevice m_device = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;  // implicitly destroyed with with VkDevice
     VkQueue m_presentQueue = VK_NULL_HANDLE;
+    VkQueue m_transferQueue = VK_NULL_HANDLE;
 
-    VkSwapchainKHR m_swapChain;
+    VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     VkFormat m_swapChainImageFormat;
     VkExtent2D m_swapChainExtent;
     std::vector<VkImage> m_swapChainImages;  // automatically destroyed with the swapchain
     std::vector<VkImageView> m_swapChainImageViews;
 
-    VkRenderPass m_renderPass;
-    VkPipelineLayout m_pipelineLayout;
-    VkPipeline m_graphicsPipeline;
+    VkRenderPass m_renderPass = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
-    VkCommandPool m_commandPool;
-    VertexArray m_vertexArray;
-    std::vector<VkCommandBuffer> m_commandBuffers;
+    VkCommandPool m_graphicsCmdPool = VK_NULL_HANDLE;
+    VkCommandPool m_transferCmdPool = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> m_graphicsCmdBuffers;
+    std::vector<VkCommandBuffer> m_transferCmdBuffers;
 
     std::vector<VkSemaphore> m_imageAvailableSemaphores;
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
@@ -124,20 +149,20 @@ private:
 
     void _CreateRenderPass();
 
-    // Create "PipelineSettings" struct and pass everything as an argument
-    void _CreateGraphicsPipeline();
-
     void _CreateFramebuffers();
 
-    void _CreateCommandPool();
-    void _CreateVertexBuffer();
+    void _CreateCommandPools();
     void _CreateCommandBuffers();
-    void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index);
+    void _RecordCommandBuffer(VkCommandBuffer command_buffer,
+                              uint32_t swch_image_index,
+                              const std::vector<VertexArray>& vertex_arrays);
 
     void _CreateSyncObjects();
 
     // Window resize events lead to swap chain recreation
     void _RecreateSwapChain();
+    
+    uint32_t _FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const;
 };
 
 MLC_NAMESPACE_END

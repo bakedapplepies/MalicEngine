@@ -4,6 +4,8 @@
 #include <vulkan/vulkan.h>
 
 #include "Engine/core/Defines.h"
+#include "Engine/GPUBuffer.h"
+#include "Engine/VulkanManager.h"
 
 MLC_NAMESPACE_START
 
@@ -16,24 +18,25 @@ struct Vertex
 class VertexArray
 {
 public:
-    VertexArray() = default;
-    VertexArray(const VkDevice& device,
-                const VkPhysicalDevice& physical_device,
+    VertexArray(const VulkanManager* vulkan_manager,
                 uint32_t binding,
-                const std::vector<uint32_t>& queue_families,
                 const std::vector<Vertex>& vertices);
-    ~VertexArray() = default;
+    ~VertexArray();
+    VertexArray(const VertexArray&) = delete;
+    VertexArray& operator=(const VertexArray&) = delete;
+    VertexArray(VertexArray&& other) noexcept;
+    VertexArray& operator=(VertexArray&& other) noexcept;
 
-    VkVertexInputBindingDescription GetBindingDescription() const;
-    std::array<VkVertexInputAttributeDescription, 2> GetAttribDescriptions() const;
-    const VkBuffer& GetVertexBuffer() const;
-    void Deallocate() const;
+    MLC_NODISCARD VkVertexInputBindingDescription GetBindingDescription() const;
+    MLC_NODISCARD std::array<VkVertexInputAttributeDescription, 2> GetAttribDescriptions() const;
+    MLC_NODISCARD uint32_t GetVerticesCount() const;
+    MLC_NODISCARD const GPUBuffer& GetGPUBuffer() const;
 
 private:
-    VkDevice m_device;
-    uint32_t m_binding;
-    VkBuffer m_vertexBuffer;
-    VkDeviceMemory m_bufferMemory;
+    const VulkanManager* m_vulkanManager;
+    uint32_t m_binding = static_cast<uint32_t>(-1);
+    uint32_t m_verticesCount = static_cast<uint32_t>(-1);
+    GPUBuffer m_buffer;
 
 private:
     MLC_NODISCARD uint32_t _FindMemoryType(const VkPhysicalDevice& physical_device,
