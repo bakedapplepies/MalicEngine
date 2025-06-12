@@ -1,6 +1,7 @@
 #include "Engine/VertexArray.h"
 
 #include "Engine/core/Assert.h"
+#include <array>
 
 MLC_NAMESPACE_START
 
