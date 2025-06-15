@@ -16,7 +16,7 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.vscode/settings.json")
     execute_process(
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/.vscode
         COMMAND_ECHO STDOUT
-        COMMAND py compile_commands_change.py ${CMAKE_BUILD_TYPE}
+        COMMAND python compile_commands_change.py ${CMAKE_BUILD_TYPE}
     )
 endif()
 

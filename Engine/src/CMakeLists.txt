@@ -8,7 +8,9 @@ add_library(LMalicEngine
     GPUBuffer.cpp
     VulkanManager.cpp
     VertexArray.cpp
+    UniformBuffer.cpp
     Shader.cpp
+    Renderer.cpp
     Malic.cpp
 )
 

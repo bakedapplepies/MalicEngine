@@ -1,7 +1,12 @@
+#pragma once
+
 #include "Engine/core/Defines.h"
 
 MLC_NAMESPACE_START
 
-const VkAllocationCallbacks* MLC_VULKAN_ALLOCATOR = nullptr;
+class Renderer
+{
+    Renderer();
+};
 
 MLC_NAMESPACE_END

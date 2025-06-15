@@ -1,40 +1,62 @@
 #include "Engine/VertexArray.h"
 
-#include "Engine/core/Assert.h"
 #include <array>
+#include "Engine/core/Assert.h"
 
 MLC_NAMESPACE_START
 
 VertexArray::VertexArray(const VulkanManager* vulkan_manager,
                          uint32_t binding,
-                         const std::vector<Vertex>& vertices)
-    : m_vulkanManager(vulkan_manager), m_binding(binding), m_verticesCount(static_cast<uint32_t>(vertices.size()))
+                         const std::vector<Vertex>& vertices,
+                         const std::vector<uint16_t>& indices)
+    : m_vulkanManager(vulkan_manager),
+      m_binding(binding),
+      m_verticesCount(static_cast<uint32_t>(vertices.size())),
+      m_indicesCount(static_cast<uint32_t>(indices.size()))
 {
     // TODO: vkBindBufferMemory2: Bind multiple buffers at once
     // vkBindBufferMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo *pBindInfos)
 
     GPUBuffer stagingBuffer;
+
+    // Upload vertex buffer
     m_vulkanManager->AllocateBuffer(stagingBuffer,
                                     vertices.size() * sizeof(Vertex),
                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);    
-    m_vulkanManager->AllocateBuffer(m_buffer,
+    m_vulkanManager->AllocateBuffer(m_vertexBuffer,
                                     vertices.size() * sizeof(Vertex),
                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     m_vulkanManager->UploadBuffer(stagingBuffer,
                                   vertices.data(),
                                   sizeof(Vertex) * vertices.size());
-    m_vulkanManager->CopyBuffer(stagingBuffer, m_buffer, sizeof(Vertex) * vertices.size());
+    m_vulkanManager->CopyBuffer(stagingBuffer, m_vertexBuffer, sizeof(Vertex) * vertices.size());
+    m_vulkanManager->DeallocateBuffer(stagingBuffer);
+
+    // Upload index buffer
+    m_vulkanManager->AllocateBuffer(stagingBuffer,
+                                    sizeof(uint16_t) * indices.size(),
+                                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    m_vulkanManager->AllocateBuffer(m_indexBuffer,
+                                    sizeof(uint16_t) * indices.size(),
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_vulkanManager->UploadBuffer(stagingBuffer,
+                                  indices.data(),
+                                  sizeof(uint16_t) * indices.size());
+    m_vulkanManager->CopyBuffer(stagingBuffer, m_indexBuffer, sizeof(uint16_t) * indices.size());
     m_vulkanManager->DeallocateBuffer(stagingBuffer);
 }
-
+                                    
 VertexArray::~VertexArray()
 {
     // Note: When performing move semantics, buffer handles with value VK_NULL_HANDLE
     // can still be safely called with vkDestroyBuffer, but of course it can't be
     // used with other functions, which can prevent implicitly ownership of buffers
-    m_vulkanManager->DeallocateBuffer(m_buffer);
+    m_vulkanManager->DeallocateBuffer(m_vertexBuffer);
+    m_vulkanManager->DeallocateBuffer(m_indexBuffer);
 }
 
 VertexArray::VertexArray(VertexArray&& other) noexcept
@@ -42,7 +64,7 @@ VertexArray::VertexArray(VertexArray&& other) noexcept
     other.m_vulkanManager = m_vulkanManager;
     other.m_binding = m_binding;
     other.m_verticesCount = m_verticesCount;
-    other.m_buffer = std::move(m_buffer);
+    other.m_vertexBuffer = std::move(m_vertexBuffer);
 
     m_vulkanManager = nullptr;
     m_binding = static_cast<uint32_t>(-1);
@@ -54,7 +76,7 @@ VertexArray& VertexArray::operator=(VertexArray&& other) noexcept
     other.m_vulkanManager = m_vulkanManager;
     other.m_binding = m_binding;
     other.m_verticesCount = m_verticesCount;
-    other.m_buffer = std::move(m_buffer);
+    other.m_vertexBuffer = std::move(m_vertexBuffer);
     
     m_vulkanManager = nullptr;
     m_binding = static_cast<uint32_t>(-1);
@@ -68,16 +90,28 @@ uint32_t VertexArray::GetVerticesCount() const
     return m_verticesCount;
 }
 
-const GPUBuffer& VertexArray::GetGPUBuffer() const
+uint32_t VertexArray::GetIndicesCount() const
 {
-    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
+    return m_indicesCount;
+}
 
-    return m_buffer;
+const GPUBuffer& VertexArray::GetVertexBuffer() const
+{
+    MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
+
+    return m_vertexBuffer;
+}
+
+const GPUBuffer& VertexArray::GetIndexBuffer() const
+{
+    MLC_ASSERT(m_indexBuffer.IsUsable(), "Vertex Array not initialized.");
+
+    return m_indexBuffer;
 }
 
 VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
 {
-    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
+    MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
 
     return VkVertexInputBindingDescription {
         .binding = m_binding,
@@ -88,7 +122,7 @@ VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
 
 std::array<VkVertexInputAttributeDescription, 2> VertexArray::GetAttribDescriptions() const
 {
-    MLC_ASSERT(m_buffer.IsUsable(), "Vertex Array not initialized.");
+    MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
 
     VkVertexInputAttributeDescription positionAttribDesc {
         .location = 0,

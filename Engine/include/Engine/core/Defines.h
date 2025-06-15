@@ -9,4 +9,9 @@ struct VkAllocationCallbacks;
 #else
     #define MLC_NODISCARD
 #endif
+
+MLC_NAMESPACE_START
+
 const extern VkAllocationCallbacks* MLC_VULKAN_ALLOCATOR;
+
+MLC_NAMESPACE_END

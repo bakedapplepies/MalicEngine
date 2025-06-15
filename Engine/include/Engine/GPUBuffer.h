@@ -23,6 +23,7 @@ public:
 private:
     VkBuffer m_handle = VK_NULL_HANDLE;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VkMemoryPropertyFlags m_properties = 0;
 };
 
 MLC_NAMESPACE_END

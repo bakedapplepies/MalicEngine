@@ -3,23 +3,26 @@
 #include <string>
 #include <fstream>
 #include <vector>
-#include <vulkan/vulkan.h>
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 #include "Engine/core/Defines.h"
+#include "Engine/VulkanManager.h"
 
 MLC_NAMESPACE_START
 
 class Shader
 {
+friend class VulkanManager;
 public:
-    Shader(const std::string& vert_path, const std::string& frag_path, const VkDevice& device);
+    Shader(const VulkanManager* vulkan_manager, const std::string& vert_path, const std::string& frag_path);
     ~Shader();
 
-    VkShaderModule vertShaderModule;
-    VkShaderModule fragShaderModule;
-
 private:
-    const VkDevice& m_device;  // TODO: Set up ordered-initializations for scoped
+    const VulkanManager* const m_vulkanManager = nullptr;
+    VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
+    VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
 
 private:
     MLC_NODISCARD std::vector<char> _ReadFile(std::ifstream& file);

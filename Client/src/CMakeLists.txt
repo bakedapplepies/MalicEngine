@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.26.0)
-project(Client CXX C)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} main.cpp Camera.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_SOURCE_DIR}/Engine/include
     ${MALIC_HEADERS}
+    ${CMAKE_SOURCE_DIR}/Engine/include
+    ${PROJECT_SOURCE_DIR}/include
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
