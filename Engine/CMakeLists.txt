@@ -20,7 +20,7 @@ set_target_properties(LMalicEngine PROPERTIES VERIFY_INTERFACE_HEADER_SETS true)
 
 target_compile_definitions(LMalicEngine PRIVATE
     MLC_ROOT_DIR="${CMAKE_SOURCE_DIR}"
-    GLM_ENABLE_EXPERIMENTAL    
+    GLM_ENABLE_EXPERIMENTAL
 )
 
 # Build-type configurations

@@ -1,5 +1,7 @@
 #include "Client/Camera.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "Engine/core/Config.h"
 
 Camera::Camera(const glm::vec3& position, const glm::vec3& direction, float near, float far, float pov)
@@ -13,6 +15,5 @@ glm::mat4 Camera::GetViewMat() const
 
 glm::mat4 Camera::GetProjMat(float aspect) const
 {
-    
     return glm::perspective(glm::radians(pov), aspect, near, far);
 }
