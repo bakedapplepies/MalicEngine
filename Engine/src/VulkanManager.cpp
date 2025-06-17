@@ -521,20 +521,6 @@ void VulkanManager::CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_conf
         .primitiveRestartEnable = VK_FALSE
     };
 
-    // Viewport & scissor
-    VkViewport viewport {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(m_swapChainExtent.width),
-        .height = static_cast<float>(m_swapChainExtent.height) * (-1.0f),  // y inversion since
-        .minDepth = 0.0f,  // just normalized depth values (?)                y-down is a mental-illness
-        .maxDepth = 1.0f
-    };
-    VkRect2D scissor {
-        .offset = { 0, 0 },
-        .extent = m_swapChainExtent
-    };
-
     // Rasterizer
     VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -1328,9 +1314,9 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 
     VkViewport viewport {
         .x = 0,
-        .y = 0,
+        .y = static_cast<float>(m_swapChainExtent.height),
         .width = static_cast<float>(m_swapChainExtent.width),
-        .height = static_cast<float>(m_swapChainExtent.height),
+        .height = -static_cast<float>(m_swapChainExtent.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f
     };

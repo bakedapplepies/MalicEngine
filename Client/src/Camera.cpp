@@ -4,6 +4,9 @@
 
 #include "Engine/core/Config.h"
 
+namespace MalicClient
+{
+
 Camera::Camera(const glm::vec3& position, const glm::vec3& direction, float near, float far, float pov)
     : position(position), direction(direction), near(near), far(far), pov(pov)
 {}
@@ -17,3 +20,5 @@ glm::mat4 Camera::GetProjMat(float aspect) const
 {
     return glm::perspective(glm::radians(pov), aspect, near, far);
 }
+
+}  // namespace MalicClients

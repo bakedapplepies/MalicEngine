@@ -1,2 +1,5 @@
+# binaries here
 build
+
+# clangd
 .cache

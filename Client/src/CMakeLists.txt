@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.26.0)
 
-add_executable(${PROJECT_NAME} main.cpp Camera.cpp)
+add_executable(${PROJECT_NAME}
+    main.cpp
+    Input.cpp
+    Camera.cpp
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${MALIC_HEADERS}
@@ -11,6 +15,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     LMalicEngine
 )
+
+# target_compile_definitions(${PROJECT_NAME} PRIVATE GLM_FORCE_LEFT_HANDED)
 
 # Build-type configurations
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")

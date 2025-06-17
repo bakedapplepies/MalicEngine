@@ -18,7 +18,9 @@
 #include "Engine/Shader.h"
 #include "Engine/UniformBuffer.h"
 
+#include "Client/Core.h"
 #include "Client/Camera.h"
+#include "Client/Input.h"
 
 struct alignas(16) MVP_UBO
 {
@@ -27,16 +29,10 @@ struct alignas(16) MVP_UBO
     glm::mat4 projection;
 };
 
-struct MyData
-{
-    std::vector<Malic::VertexArray> vertexArrays;
-    std::unique_ptr<Malic::UniformBuffer> uniformBuffer;
-
-    Camera camera;
-};
-
 int main()
 {
+    using namespace MalicClient;
+
     Malic::MalicEngine::WindowInfo windowInfo {
         .width = 800,
         .height = 600,
@@ -46,9 +42,9 @@ int main()
     // TODO: Below is terrible API-design
     {  // scoped MyData to ensure everything is deleted before Engine shutdown
         MyData userData {
-            .camera = Camera(
-                glm::vec3(2.0f, 2.0f, 2.0f),     // position
-                glm::vec3(-2.0f, -2.0f, -2.0f),  // direction
+            .camera = MalicClient::Camera(
+                glm::vec3(0.0f, 0.0f, 1.0f),     // position
+                glm::vec3(0.0f, 0.0f, -1.0f),  // direction
                 0.1f,                            // near
                 10.0f,                           // far
                 45.0f                            // fov in degrees
@@ -64,23 +60,27 @@ int main()
 
 void MalicEntry(Malic::MalicEngine* engine)
 {
+    using namespace MalicClient;
+
+    engine->HideCursor();
+
     MyData* myData = static_cast<MyData*>(engine->GetUserPointer());
     Malic::VulkanManager* vulkanManager = engine->GetMutVulkanManager();
     const std::vector<Malic::Vertex> vertices {
         Malic::Vertex {
-            .position = { -0.5f, -0.5f, 0.0f },
+            .position = { -0.5f, 0.5f, 0.0f },
             .color = { 1.0f, 0.0f, 0.0f }
         },
         Malic::Vertex {
-            .position = { 0.5f, -0.5f, 0.0f },
+            .position = { 0.5f, 0.5f, 0.0f },
             .color = { 0.0f, 1.0f, 0.0f }
         },
         Malic::Vertex {
-            .position = { 0.5f, 0.5f, 0.0f },
+            .position = { 0.5f, -0.5f, 0.0f },
             .color = { 0.0f, 0.0f, 1.0f }
         },
         Malic::Vertex {
-            .position = { -0.5f, 0.5f, 0.0f },
+            .position = { -0.5f, -0.5f, 0.0f },
             .color = { 1.0f, 1.0f, 1.0f }
         }
     };
@@ -119,32 +119,19 @@ void MalicEntry(Malic::MalicEngine* engine)
 
 void MalicUpdate(Malic::MalicEngine* engine, float delta_time)
 {
+    using namespace MalicClient;
+
     static MyData* myData = static_cast<MyData*>(engine->GetUserPointer());
     const Malic::MalicEngine::WindowInfo* windowInfo = engine->GetWindowInfo();
 
-    if (engine->IsKeyPressed(GLFW_KEY_A))
-    {
-        myData->camera.position += glm::normalize(glm::cross(Malic::VEC3_UP, myData->camera.direction)) * delta_time;
-    }
-    if (engine->IsKeyPressed(GLFW_KEY_D))
-    {
-        myData->camera.position -= glm::normalize(glm::cross(Malic::VEC3_UP, myData->camera.direction)) * delta_time;
-    }
-    if (engine->IsKeyPressed(GLFW_KEY_W))
-    {
-        myData->camera.position += glm::normalize(glm::vec3(myData->camera.direction.x, 0.0f, myData->camera.direction.z)) * delta_time;
-    }
-    if (engine->IsKeyPressed(GLFW_KEY_S))
-    {
-        myData->camera.position -= glm::normalize(glm::vec3(myData->camera.direction.x, 0.0f, myData->camera.direction.z)) * delta_time;
-    }
+    MalicClient::ProcessInput(engine, delta_time);
 
     MVP_UBO mvpUBOData;
 
     glm::mat4 model = glm::mat4(1.0f);
-    model = glm::rotate(model,
-                        static_cast<float>(glfwGetTime()) * glm::radians(10.0f),
-                        glm::vec3(0.0f, 0.0f, 1.0f));
+    // model = glm::rotate(model,
+    //                     static_cast<float>(glfwGetTime()) * glm::radians(10.0f),
+    //                     glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 view = myData->camera.GetViewMat();
     glm::mat4 projection =
         myData->camera.GetProjMat(static_cast<float>(windowInfo->width)/static_cast<float>(windowInfo->height));

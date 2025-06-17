@@ -7,6 +7,9 @@
 #undef near  // <- stupid remnant from windows
 #undef far
 
+namespace MalicClient
+{
+
 class Camera
 {
 public:
@@ -26,3 +29,5 @@ public:
     float far;
     float pov;
 };
+
+}  // namespace MalicClient

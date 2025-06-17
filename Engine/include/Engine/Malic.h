@@ -31,6 +31,8 @@ public:
     void ShutDown();
 
     MLC_NODISCARD bool IsKeyPressed(uint32_t key) const;
+    MLC_NODISCARD glm::vec2 GetCursorPos() const;
+    void HideCursor() const;
 
     MLC_NODISCARD const WindowInfo* GetWindowInfo() const;
     void SetUserPointer(void* data);

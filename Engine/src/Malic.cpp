@@ -83,7 +83,19 @@ void MalicEngine::ShutDown()
 
 bool MalicEngine::IsKeyPressed(uint32_t key) const
 {
-    return glfwGetKey(m_window, key);
+    return glfwGetKey(m_window, key) == GLFW_PRESS;
+}
+
+glm::vec2 MalicEngine::GetCursorPos() const
+{
+    double x, y;
+    glfwGetCursorPos(m_window, &x, &y);
+    return { x, y };
+}
+
+void MalicEngine::HideCursor() const
+{
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 void MalicEngine::_WindowInit()
@@ -122,8 +134,8 @@ void MalicEngine::_MainLoop()
             timeTotal = 0.0f;
         }
 
-        glfwPollEvents();
         MalicUpdate(this, deltaTime);
+        glfwPollEvents();
         _DrawFrame();
     }
 
