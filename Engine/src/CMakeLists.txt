@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.26.0)
-project(MalicEngine CXX C)
 
 add_library(LMalicEngine
     core/Debug.cpp
@@ -10,6 +9,9 @@ add_library(LMalicEngine
     VertexArray.cpp
     UniformBuffer.cpp
     Shader.cpp
+    Texture2D.cpp
+    GPUImage.cpp
+    Image2DViewer.cpp
     Renderer.cpp
     Malic.cpp
 )
@@ -31,6 +33,7 @@ if (WIN32)
     target_link_libraries(LMalicEngineDeps INTERFACE
         glfw3
         glm
+        STB_LIBRARY
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         Vulkan::Vulkan
     )
@@ -46,6 +49,8 @@ if (UNIX)
     target_link_libraries(LMalicEngineDeps INTERFACE
         Vulkan::Vulkan
         glfw3
+        glm
+        STB_LIBRARY
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         # dl
         # pthread

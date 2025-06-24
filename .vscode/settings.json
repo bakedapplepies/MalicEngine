@@ -112,7 +112,7 @@
         "--graphviz=dependency_graph.dot"
     ],
     "clangd.arguments": [
-        "--compile-commands-dir=${workspaceFolder}/build/Release",
+        "--compile-commands-dir=${workspaceFolder}/build/Debug",
         "--header-insertion=never"
     ],
     "C_Cpp.intelliSenseEngine": "disabled",

@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.26.0)
-project(MalicEngine CXX C)
 
 find_package(Vulkan REQUIRED)
 message("Vulkan Version " ${Vulkan_VERSION})
@@ -7,10 +6,11 @@ message("Vulkan Version " ${Vulkan_VERSION})
 set(MALIC_HEADERS
     ${VULKAN_HEADERS}
     ${Vulkan_INCLUDE_DIRS}
-    ${CMAKE_SOURCE_DIR}/Engine/include
+    ${PROJECT_SOURCE_DIR}/Engine/include
     ${GLFW_INSTALL_DIR}/install/include
     ${GLM_INSTALL_DIR}/install/include
     ${FMT_INSTALL_DIR}/install/include
+    ${PROJECT_SOURCE_DIR}/Engine/vendor
 CACHE INTERNAL "")
 
 add_subdirectory(vendor)

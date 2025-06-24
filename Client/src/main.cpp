@@ -17,6 +17,7 @@
 #include "Engine/VertexArray.h"
 #include "Engine/Shader.h"
 #include "Engine/UniformBuffer.h"
+#include "Engine/Texture2D.h"
 
 #include "Client/Core.h"
 #include "Client/Camera.h"
@@ -43,11 +44,11 @@ int main()
     {  // scoped MyData to ensure everything is deleted before Engine shutdown
         MyData userData {
             .camera = MalicClient::Camera(
-                glm::vec3(0.0f, 0.0f, 1.0f),     // position
+                glm::vec3(0.0f, 0.0f, 1.0f),   // position
                 glm::vec3(0.0f, 0.0f, -1.0f),  // direction
-                0.1f,                            // near
-                10.0f,                           // far
-                45.0f                            // fov in degrees
+                0.1f,                          // near
+                10.0f,                         // far
+                45.0f                          // fov in degrees
             )
         };
         engine.SetUserPointer(&userData);
@@ -69,19 +70,23 @@ void MalicEntry(Malic::MalicEngine* engine)
     const std::vector<Malic::Vertex> vertices {
         Malic::Vertex {
             .position = { -0.5f, 0.5f, 0.0f },
-            .color = { 1.0f, 0.0f, 0.0f }
+            .color = { 1.0f, 0.0f, 0.0f },
+            .uv = { 0.0f, 0.0f }
         },
         Malic::Vertex {
             .position = { 0.5f, 0.5f, 0.0f },
-            .color = { 0.0f, 1.0f, 0.0f }
+            .color = { 0.0f, 1.0f, 0.0f },
+            .uv = { 1.0f, 0.0f }
         },
         Malic::Vertex {
             .position = { 0.5f, -0.5f, 0.0f },
-            .color = { 0.0f, 0.0f, 1.0f }
+            .color = { 0.0f, 0.0f, 1.0f },
+            .uv = { 1.0f, 1.0f }
         },
         Malic::Vertex {
             .position = { -0.5f, -0.5f, 0.0f },
-            .color = { 1.0f, 1.0f, 1.0f }
+            .color = { 1.0f, 1.0f, 1.0f },
+            .uv = { 0.0f, 1.0f }
         }
     };
     const std::vector<uint16_t> indices {
@@ -115,6 +120,8 @@ void MalicEntry(Malic::MalicEngine* engine)
     vulkanManager->CreateGraphicsPipeline(pipelineConfig);
 
     myData->uniformBuffer = std::make_unique<Malic::UniformBuffer>(vulkanManager, 0, sizeof(MVP_UBO));
+
+    myData->texture = std::make_unique<Malic::Texture2D>(vulkanManager, "../../Engine/resources/images/hamster.jpg");
 }
 
 void MalicUpdate(Malic::MalicEngine* engine, float delta_time)

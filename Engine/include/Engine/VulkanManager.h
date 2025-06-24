@@ -17,6 +17,8 @@
 #include "Engine/core/Config.h"
 #include "Engine/core/Defines.h"
 #include "Engine/GPUBuffer.h"
+#include "Engine/GPUImage.h"
+#include "Engine/Image2DViewer.h"
 
 MLC_NAMESPACE_START
 
@@ -86,6 +88,23 @@ public:
                                          VkDeviceSize offset,
                                          VkDeviceSize size) const;
 
+    void AllocateImage2D(GPUImage& image,
+                         int width,
+                         int height,
+                         VkImageUsageFlags usage,
+                         VkMemoryPropertyFlags properties) const;
+    void DeallocateImage2D(GPUImage& image) const;
+    void TransitionImageLayout(const GPUImage& image,
+                                VkFormat format,
+                                VkImageLayout old_layout,
+                                VkImageLayout new_layout) const;
+    void CopyBufferToImage(const GPUBuffer& src,
+                           const GPUImage& dst,
+                           uint32_t width,
+                           uint32_t height) const;
+    void CreateImage2DViewer(Image2DViewer& viewer, const GPUImage& image, VkFormat format) const;
+    void DestroyImage2DViewer(Image2DViewer& viewer) const;
+
     void CreateShaderModule(VkShaderModule& shader_module, const std::vector<char>& bytecode) const;
     void DestroyShaderModule(VkShaderModule& shader_module) const;
 
@@ -97,6 +116,7 @@ public:
     void DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_IN_FLIGHT>& ubo_buffers,
                               VkDeviceSize offset,
                               VkDeviceSize size_per_buffer) const;
+    void DescriptorSetBindImage2D(const Image2DViewer& viewer) const;
     // Create "PipelineSettings" struct and pass everything as an argument
     void CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_config);
 
@@ -175,7 +195,7 @@ private:
     MLC_NODISCARD VkSurfaceFormatKHR _ChooseSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
     MLC_NODISCARD VkPresentModeKHR _ChooseSwapChainPresentMode(const std::vector<VkPresentModeKHR>& present_modes);
     void _CreateSwapChain();
-    void _CreateImageViews();
+    void _CreateSwapChainImageViews();
 
     void _CreateRenderPass();
 
@@ -189,10 +209,14 @@ private:
 
     void _CreateSyncObjects();
 
+    // ----- Utility Functions -----
+
     // Window resize events lead to swap chain recreation
     void _RecreateSwapChain();
-    
-    uint32_t _FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const;
+    MLC_NODISCARD VkImageView _CreateImageView(const VkImage& image, VkFormat format) const;
+    MLC_NODISCARD uint32_t _FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const;
+    MLC_NODISCARD VkCommandBuffer _BeginSingleUseCommands() const;
+    void _EndSingleUseCommands(VkCommandBuffer& command_buffer, uint32_t family_index) const;
 };
 
 MLC_NAMESPACE_END

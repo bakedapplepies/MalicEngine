@@ -40,7 +40,7 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateLogicalDevice();
     _GetQueues();
     _CreateSwapChain();
-    _CreateImageViews();
+    _CreateSwapChainImageViews();
     _CreateRenderPass();
     _CreateDescriptorPool();
     _CreateFramebuffers();
@@ -239,8 +239,8 @@ void VulkanManager::AllocateBuffer(GPUBuffer& buffer,
     result = vkAllocateMemory(m_device, &allocInfo, MLC_VULKAN_ALLOCATOR, &buffer.m_memory);
     MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate vertex buffer memory.");
 
-    VkBindBufferMemoryInfo bindBufferInfo;
     vkBindBufferMemory(m_device, buffer.m_handle, buffer.m_memory, 0);
+
     buffer.m_properties = properties;
 }
 
@@ -265,51 +265,14 @@ void VulkanManager::UploadBuffer(const GPUBuffer& buffer, const void* data, size
 
 void VulkanManager::CopyBuffer(const GPUBuffer& src, const GPUBuffer& dst, VkDeviceSize size) const
 {
-    VkCommandBufferAllocateInfo allocInfo {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext = nullptr,
-        .commandPool = m_transferCmdPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1
-    };
-    
-    VkCommandBuffer copyCmdBuffer;
-    VkResult result = vkAllocateCommandBuffers(m_device, &allocInfo, &copyCmdBuffer);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate copy command buffer.");
-
-    VkCommandBufferBeginInfo beginInfo {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext = nullptr,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        .pInheritanceInfo = nullptr
-    };
-
-    vkBeginCommandBuffer(copyCmdBuffer, &beginInfo);
+    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands();
     VkBufferCopy copyRegion {
         .srcOffset = 0,
         .dstOffset = 0,
         .size = size
     };
     vkCmdCopyBuffer(copyCmdBuffer, src.m_handle, dst.m_handle, 1, &copyRegion);
-    vkEndCommandBuffer(copyCmdBuffer);
-
-    VkFence fence;
-    CreateFences(&fence, 1, false);
-    VkSubmitInfo submitInfo {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext = nullptr,
-        .waitSemaphoreCount = 0,
-        .pWaitSemaphores = nullptr,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &copyCmdBuffer,
-        .signalSemaphoreCount = 0,
-        .pSignalSemaphores = nullptr
-    };
-
-    vkQueueSubmit(m_transferQueue, 1, &submitInfo, fence);
-    vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX);
-    vkFreeCommandBuffers(m_device, m_transferCmdPool, 1, &copyCmdBuffer);
-    DestroyFences(&fence, 1);
+    _EndSingleUseCommands(copyCmdBuffer, m_queueFamilyIndices.transferFamily.value());
 }
 
 void* VulkanManager::GetBufferMapping(const GPUBuffer& buffer,
@@ -325,6 +288,195 @@ void* VulkanManager::GetBufferMapping(const GPUBuffer& buffer,
     vkMapMemory(m_device, buffer.m_memory, offset, size, 0, &mappedMemory);
 
     return mappedMemory;
+}
+
+void VulkanManager::AllocateImage2D(GPUImage& image,
+                                    int width,
+                                    int height,
+                                    VkImageUsageFlags usage,
+                                    VkMemoryPropertyFlags properties) const
+{
+    VkImageCreateInfo imageCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .extent = {
+            .width = static_cast<uint32_t>(width),
+            .height = static_cast<uint32_t>(height),
+            .depth = 1
+        },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,  // only used by graphics family
+        .queueFamilyIndexCount = 1,
+        .pQueueFamilyIndices = &m_queueFamilyIndices.graphicsFamily.value(),
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VkResult result = vkCreateImage(m_device, &imageCreateInfo, MLC_VULKAN_ALLOCATOR, &image.m_handle);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create allocate image (2D).");
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(m_device, image.m_handle, &memoryRequirements);
+
+    VkMemoryAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .allocationSize = memoryRequirements.size,
+        .memoryTypeIndex = _FindMemoryType(memoryRequirements.memoryTypeBits, properties)
+    };
+
+    result = vkAllocateMemory(m_device, &allocInfo, MLC_VULKAN_ALLOCATOR, &image.m_memory);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate image memory (2D).");
+
+    vkBindImageMemory(m_device, image.m_handle, image.m_memory, 0);
+}
+
+void VulkanManager::DeallocateImage2D(GPUImage& image) const
+{
+    MLC_ASSERT(image.m_handle != VK_NULL_HANDLE, "Image handle is VK_NULL_HANDLE.");
+    MLC_ASSERT(image.m_memory != VK_NULL_HANDLE, "Image memory is VK_NULL_HANDLE.");
+
+    vkDestroyImage(m_device, image.m_handle, MLC_VULKAN_ALLOCATOR);
+    image.m_handle = VK_NULL_HANDLE;
+    vkFreeMemory(m_device, image.m_memory, MLC_VULKAN_ALLOCATOR);
+    image.m_memory = VK_NULL_HANDLE;
+}
+
+void VulkanManager::TransitionImageLayout(const GPUImage& image,
+                                           VkFormat format,
+                                           VkImageLayout old_layout,
+                                           VkImageLayout new_layout) const
+{
+    VkCommandBuffer commandBuffer = _BeginSingleUseCommands();
+    VkImageMemoryBarrier imageBarrier {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = 0,  // TODO
+        .dstAccessMask = 0,  // TODO
+        .oldLayout = old_layout,
+        .newLayout = new_layout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image.m_handle,
+        .subresourceRange = VkImageSubresourceRange {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    VkPipelineStageFlags srcStage, dstStage;
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        imageBarrier.srcAccessMask = 0;
+        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        MLC_ASSERT(false, "Unsupported layout transition.");
+    }
+
+    vkCmdPipelineBarrier(commandBuffer,
+                         srcStage, dstStage,
+                         0,
+                         0, nullptr,
+                         0, nullptr,
+                         1, &imageBarrier);
+    _EndSingleUseCommands(commandBuffer, m_queueFamilyIndices.graphicsFamily.value());
+}
+
+void VulkanManager::CopyBufferToImage(const GPUBuffer& src,
+                                      const GPUImage& dst,
+                                      uint32_t width,
+                                      uint32_t height) const
+{
+    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands();
+    VkBufferImageCopy region {
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = VkImageSubresourceLayers {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        },
+        .imageOffset = { 0, 0, 0 },
+        .imageExtent = VkExtent3D {
+            .width = width,
+            .height = height,
+            .depth = 1
+        }
+    };
+    vkCmdCopyBufferToImage(copyCmdBuffer,
+                           src.m_handle,
+                           dst.m_handle,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1,
+                           &region);
+    _EndSingleUseCommands(copyCmdBuffer, m_queueFamilyIndices.transferFamily.value());
+}
+
+void VulkanManager::CreateImage2DViewer(Image2DViewer& viewer, const GPUImage& image, VkFormat format) const
+{
+    viewer.m_imageView = _CreateImageView(image.m_handle, format);
+
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+
+    VkSamplerCreateInfo samplerCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+        .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
+        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = VK_FALSE
+    };
+
+    VkResult result = vkCreateSampler(m_device, &samplerCreateInfo, MLC_VULKAN_ALLOCATOR, &viewer.m_sampler);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create sampler.");
+}
+
+void VulkanManager::DestroyImage2DViewer(Image2DViewer& viewer) const
+{
+    MLC_ASSERT(viewer.m_imageView != VK_NULL_HANDLE, "Image2DViewer ImageView is VK_NULL_HANDLE.");
+    MLC_ASSERT(viewer.m_sampler != VK_NULL_HANDLE, "Image2DViewer Sampler is VK_NULL_HANDLE.");
+
+    vkDestroyImageView(m_device, viewer.m_imageView, MLC_VULKAN_ALLOCATOR);
+    viewer.m_imageView = VK_NULL_HANDLE;
+    vkDestroySampler(m_device, viewer.m_sampler, MLC_VULKAN_ALLOCATOR);
+    viewer.m_sampler = VK_NULL_HANDLE;
 }
 
 void VulkanManager::CreateShaderModule(VkShaderModule& shader_module, const std::vector<char>& bytecode) const
@@ -383,16 +535,25 @@ void VulkanManager::CreateDescriptorSetLayout()
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .pImmutableSamplers = nullptr  // related to sampler-related descriptors
     };
-    VkDescriptorSetLayoutCreateInfo uboCreateInfo {
+    VkDescriptorSetLayoutBinding samplerLayoutBinding {
+        .binding = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .pImmutableSamplers = nullptr
+    };
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding
+        .bindingCount = static_cast<uint32_t>(bindings.size()),
+        .pBindings = bindings.data()
     };
 
     VkResult result = vkCreateDescriptorSetLayout(m_device,
-                                                  &uboCreateInfo,
+                                                  &descriptorSetLayoutCreateInfo,
                                                   MLC_VULKAN_ALLOCATOR,
                                                   &m_descriptorSetLayout);
     MLC_ASSERT(result == VK_SUCCESS, "Failed to create descriptor set layout.");
@@ -437,6 +598,32 @@ void VulkanManager::DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_
             .pTexelBufferView = nullptr
         };
         
+        vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
+    }
+}
+
+void VulkanManager::DescriptorSetBindImage2D(const Image2DViewer& viewer) const
+{
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkDescriptorImageInfo imageInfo {
+            .sampler = viewer.m_sampler,
+            .imageView = viewer.m_imageView,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
+        VkWriteDescriptorSet descriptorWrite {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = nullptr,
+            .dstSet = m_descriptorSets[i],
+            .dstBinding = 1,
+            .dstArrayElement = 0,  // It is possible to update multiple descriptors at once in an array
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &imageInfo,
+            .pBufferInfo = nullptr,
+            .pTexelBufferView = nullptr
+        };
+
         vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
     }
 }
@@ -500,7 +687,7 @@ void VulkanManager::CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_conf
     // TODO
     VkVertexInputBindingDescription bindingDesc =
         pipeline_config.vertexArrays->at(0).GetBindingDescription();
-    std::array<VkVertexInputAttributeDescription, 2> attribDescs =
+    std::array<VkVertexInputAttributeDescription, 3> attribDescs =
         pipeline_config.vertexArrays->at(0).GetAttribDescriptions();
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -913,7 +1100,10 @@ bool VulkanManager::_IsPhysicalDeviceSuitable(const VkPhysicalDevice& physical_d
         swapChainAdequate = !swapChainSupportDetails.formats.empty() && !swapChainSupportDetails.presentModes.empty();
     }
 
-    return m_queueFamilyIndices.IsComplete() && extensionsSupported && swapChainAdequate;
+    return m_queueFamilyIndices.IsComplete() &&
+           extensionsSupported &&
+           swapChainAdequate &&
+           physicalDeviceFeatures.samplerAnisotropy;
 }
 
 void VulkanManager::_PickPhysicalDevice()
@@ -962,6 +1152,7 @@ void VulkanManager::_CreateLogicalDevice()
     }
 
     VkPhysicalDeviceFeatures deviceFeatures {};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
 
     // Device creation here
     VkDeviceCreateInfo deviceCreateInfo {
@@ -1101,38 +1292,12 @@ void VulkanManager::_CreateSwapChain()
     vkGetSwapchainImagesKHR(m_device, m_swapChain, &swapChainImageCount, m_swapChainImages.data());
 }
 
-void VulkanManager::_CreateImageViews()
+void VulkanManager::_CreateSwapChainImageViews()
 {
     m_swapChainImageViews.resize(m_swapChainImages.size());
     for (uint32_t i = 0; i < m_swapChainImages.size(); i++)
     {
-        VkImageViewCreateInfo imageViewCreateInfo {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .image = m_swapChainImages[i],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = m_swapChainImageFormat,
-            .components = VkComponentMapping {
-                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a = VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-            .subresourceRange = VkImageSubresourceRange {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1
-            }
-        };
-
-        VkResult result = vkCreateImageView(m_device,
-                                            &imageViewCreateInfo,
-                                            MLC_VULKAN_ALLOCATOR,
-                                            &m_swapChainImageViews[i]);
-        MLC_ASSERT(result == VK_SUCCESS, "Failed to create swap chain image views.");
+        m_swapChainImageViews[i] = _CreateImageView(m_swapChainImages[i], m_swapChainImageFormat);
     }
 }
 
@@ -1357,17 +1522,23 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 
 void VulkanManager::_CreateDescriptorPool()
 {
-    VkDescriptorPoolSize poolSize {  // TODO: Maybe add more types
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = MAX_FRAMES_IN_FLIGHT
+    std::array<VkDescriptorPoolSize, 2> poolSizes {
+        VkDescriptorPoolSize {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+        },
+        VkDescriptorPoolSize {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+        }
     };
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
         .maxSets = MAX_FRAMES_IN_FLIGHT,
-        .poolSizeCount = 1,
-        .pPoolSizes = &poolSize
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data()
     };
 
     VkResult result = vkCreateDescriptorPool(m_device,
@@ -1443,8 +1614,39 @@ void VulkanManager::_RecreateSwapChain()
     vkDestroySwapchainKHR(m_device, m_swapChain, MLC_VULKAN_ALLOCATOR);
 
     _CreateSwapChain();
-    _CreateImageViews();
+    _CreateSwapChainImageViews();
     _CreateFramebuffers();
+}
+
+VkImageView VulkanManager::_CreateImageView(const VkImage& image, VkFormat format) const
+{
+    VkImageViewCreateInfo createInfo {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .image = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format,
+        .components = VkComponentMapping {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    VkImageView imageView;
+    VkResult result = vkCreateImageView(m_device, &createInfo, MLC_VULKAN_ALLOCATOR, &imageView);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to create image view.");
+
+    return imageView;
 }
 
 uint32_t VulkanManager::_FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const
@@ -1462,6 +1664,56 @@ uint32_t VulkanManager::_FindMemoryType(uint32_t type_filter, VkMemoryPropertyFl
     }
     MLC_ASSERT(false, "Failed to find suitable device memory type.");
     return static_cast<uint32_t>(-1);
+}
+
+VkCommandBuffer VulkanManager::_BeginSingleUseCommands() const
+{
+    VkCommandBufferAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = m_transferCmdPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+    
+    VkCommandBuffer commandBuffer;
+    VkResult result = vkAllocateCommandBuffers(m_device, &allocInfo, &commandBuffer);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate copy command buffer.");
+
+    VkCommandBufferBeginInfo beginInfo {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = nullptr,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    return commandBuffer;
+}
+
+void VulkanManager::_EndSingleUseCommands(VkCommandBuffer& command_buffer, uint32_t family_index) const
+{
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo submitInfo {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = nullptr,
+        .waitSemaphoreCount = 0,
+        .pWaitSemaphores = nullptr,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &command_buffer,
+        .signalSemaphoreCount = 0,
+        .pSignalSemaphores = nullptr
+    };
+
+    VkFence fence;
+    CreateFences(&fence, 1, false);
+
+    vkQueueSubmit(m_transferQueue, 1, &submitInfo, fence);
+    vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkFreeCommandBuffers(m_device, m_transferCmdPool, 1, &command_buffer);
+
+    DestroyFences(&fence, 1);
 }
 
 MLC_NAMESPACE_END

@@ -48,7 +48,7 @@ void RotateCamera(const Malic::MalicEngine* engine, float delta_time)
     glm::vec2 cursorPos = engine->GetCursorPos();
 
     static float pitch = glm::degrees(glm::asin(myData->camera.direction.y));
-    static float yaw = -glm::degrees(glm::acos(myData->camera.direction.x / glm::cos(glm::radians(pitch))));
+    static float yaw = glm::sign(myData->camera.direction.z) * glm::degrees(glm::acos(myData->camera.direction.x / glm::cos(glm::radians(pitch))));
     static float sensitivity = 0.065f;
     static float lastX = cursorPos.x;
     static float lastY = cursorPos.y;

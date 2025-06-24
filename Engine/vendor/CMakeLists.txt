@@ -11,6 +11,8 @@ elseif (WIN32)
     set(LIB lib)
 endif ()
 
+add_library(STB_LIBRARY STATIC stb/stb_image.cpp)
+
 set(GLFW_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern/glfw CACHE INTERNAL "")
 message("${GLFW_INSTALL_DIR}")
 ExternalProject_Add(

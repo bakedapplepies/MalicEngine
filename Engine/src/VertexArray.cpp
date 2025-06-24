@@ -120,7 +120,7 @@ VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
     };
 }
 
-std::array<VkVertexInputAttributeDescription, 2> VertexArray::GetAttribDescriptions() const
+std::array<VkVertexInputAttributeDescription, 3> VertexArray::GetAttribDescriptions() const
 {
     MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
 
@@ -136,10 +136,17 @@ std::array<VkVertexInputAttributeDescription, 2> VertexArray::GetAttribDescripti
         .format = VK_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, color)
     };
+    VkVertexInputAttributeDescription uvAttribDesc {
+        .location = 2,
+        .binding = m_binding,
+        .format = VK_FORMAT_R32G32_SFLOAT,
+        .offset = offsetof(Vertex, uv)
+    };
 
-    return std::array<VkVertexInputAttributeDescription, 2> {
+    return std::array<VkVertexInputAttributeDescription, 3> {
         positionAttribDesc,
-        colorAttribDesc
+        colorAttribDesc,
+        uvAttribDesc
     };
 }
 

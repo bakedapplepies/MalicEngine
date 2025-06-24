@@ -14,6 +14,7 @@ struct Vertex
 {
     glm::vec3 position;
     glm::vec3 color;
+    glm::vec2 uv;
 };
 
 class VertexArray
@@ -30,7 +31,7 @@ public:
     VertexArray& operator=(VertexArray&& other) noexcept;
 
     MLC_NODISCARD VkVertexInputBindingDescription GetBindingDescription() const;
-    MLC_NODISCARD std::array<VkVertexInputAttributeDescription, 2> GetAttribDescriptions() const;
+    MLC_NODISCARD std::array<VkVertexInputAttributeDescription, 3> GetAttribDescriptions() const;
     MLC_NODISCARD uint32_t GetVerticesCount() const;
     MLC_NODISCARD uint32_t GetIndicesCount() const;
     MLC_NODISCARD const GPUBuffer& GetVertexBuffer() const;
