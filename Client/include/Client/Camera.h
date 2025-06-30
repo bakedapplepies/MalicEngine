@@ -13,6 +13,7 @@ namespace MalicClient
 class Camera
 {
 public:
+    Camera() = default;
     Camera(const glm::vec3& position, const glm::vec3& direction, float near, float far, float pov);
     ~Camera() = default;
 

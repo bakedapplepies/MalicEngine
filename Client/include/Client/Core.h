@@ -10,7 +10,7 @@
 namespace MalicClient
 {
 
-struct MyData
+struct ApplicationData
 {
     std::vector<Malic::VertexArray> vertexArrays;
     std::unique_ptr<Malic::UniformBuffer> uniformBuffer;

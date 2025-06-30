@@ -91,6 +91,7 @@ public:
     void AllocateImage2D(GPUImage& image,
                          int width,
                          int height,
+                         VkFormat format,
                          VkImageUsageFlags usage,
                          VkMemoryPropertyFlags properties) const;
     void DeallocateImage2D(GPUImage& image) const;
@@ -152,6 +153,9 @@ private:
     VkDescriptorPool m_descriptorPool;
     std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> m_descriptorSets;
 
+    GPUImage m_depthImage;
+    VkImageView m_depthImageView = VK_NULL_HANDLE;
+
     std::vector<VkSemaphore> m_imageAvailableSemaphores;
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
     std::vector<VkFence> m_inFlightFences;
@@ -203,9 +207,16 @@ private:
 
     void _CreateCommandPools();
     void _CreateCommandBuffers();
-    void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index);
+    void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index) const;
 
     void _CreateDescriptorPool();
+
+    MLC_NODISCARD VkFormat _FindSupportedFormat(const std::vector<VkFormat>& candidates,
+                                                VkImageTiling tiling,
+                                                VkFormatFeatureFlags features) const;
+    MLC_NODISCARD VkFormat _FindDepthFormat() const;
+    MLC_NODISCARD bool _HasStencilComponent(VkFormat format) const;
+    void _CreateDepthResources();
 
     void _CreateSyncObjects();
 
@@ -213,7 +224,9 @@ private:
 
     // Window resize events lead to swap chain recreation
     void _RecreateSwapChain();
-    MLC_NODISCARD VkImageView _CreateImageView(const VkImage& image, VkFormat format) const;
+    MLC_NODISCARD VkImageView _CreateImageView(const VkImage& image,
+                                               VkFormat format,
+                                               VkImageAspectFlags aspectFlags) const;
     MLC_NODISCARD uint32_t _FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const;
     MLC_NODISCARD VkCommandBuffer _BeginSingleUseCommands() const;
     void _EndSingleUseCommands(VkCommandBuffer& command_buffer, uint32_t family_index) const;

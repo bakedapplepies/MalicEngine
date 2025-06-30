@@ -13,7 +13,7 @@ void ProcessInput(const Malic::MalicEngine *engine, float delta_time)
 
 void MoveCamera(const Malic::MalicEngine* engine, float delta_time)
 {
-    static MyData* myData = static_cast<MyData*>(engine->GetUserPointer());
+    static ApplicationData* myData = static_cast<ApplicationData*>(engine->GetUserPointer());
 
     if (engine->IsKeyPressed(GLFW_KEY_A))
     {
@@ -43,7 +43,7 @@ void MoveCamera(const Malic::MalicEngine* engine, float delta_time)
 
 void RotateCamera(const Malic::MalicEngine* engine, float delta_time)
 {
-    static MyData* myData = static_cast<MyData*>(engine->GetUserPointer());
+    static ApplicationData* myData = static_cast<ApplicationData*>(engine->GetUserPointer());
 
     glm::vec2 cursorPos = engine->GetCursorPos();
 
