@@ -117,8 +117,8 @@ void MalicEntry(Malic::MalicEngine* engine)
 
     myData->vertexArrays.push_back(engine->CreateVertexArray(0, vertices, indices));
     
-    std::filesystem::path vertPath = "../../Engine/resources/shaders/bin/default_vert.spv";
-    std::filesystem::path fragPath = "../../Engine/resources/shaders/bin/default_frag.spv";
+    std::filesystem::path vertPath = "../../Client/resources/shaders/bin/default_vert.spv";
+    std::filesystem::path fragPath = "../../Client/resources/shaders/bin/default_frag.spv";
     Malic::Shader defaultShader = engine->CreateShader(
         vertPath.string(),
         fragPath.string()
@@ -147,7 +147,7 @@ void MalicEntry(Malic::MalicEngine* engine)
     engine->AssignPipeline(pipelineConfig);
 
     myData->uniformBuffer = engine->CreateUBO(0, sizeof(MVP_UBO));
-    myData->texture = engine->CreateTexture2D("../../Engine/resources/images/hamster.jpg");
+    myData->texture = engine->CreateTexture2D("../../Client/resources/images/hamster.jpg");
 }
 
 void MalicUpdate(Malic::MalicEngine* engine, float delta_time)
