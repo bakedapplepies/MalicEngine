@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.26.0)
 
 add_executable(${PROJECT_NAME}
     main.cpp
+    Core.cpp
     Application.cpp
     Input.cpp
     Camera.cpp

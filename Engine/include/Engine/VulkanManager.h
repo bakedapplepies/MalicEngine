@@ -19,6 +19,8 @@
 #include "Engine/GPUBuffer.h"
 #include "Engine/GPUImage.h"
 #include "Engine/Image2DViewer.h"
+#include "Engine/DescriptorInfo.h"
+#include "Engine/PipelineResources.h"
 
 MLC_NAMESPACE_START
 
@@ -47,20 +49,13 @@ public:
 
     struct SwapChainSupportDetails
     {
-        VkSurfaceCapabilitiesKHR capabilities;
+        VkSurfaceCapabilitiesKHR capabilities {};
         std::vector<VkSurfaceFormatKHR> formats;
         std::vector<VkPresentModeKHR> presentModes;
 
         // capabilities: stuff like image dimensions are swap chain size
         // formats: pixel formats, color space
         // presentModes: available present modes
-    };
-
-    struct GraphicsPipelineConfig
-    {
-        const Shader* shader;
-        const std::vector<VertexArray>* vertexArrays;
-        // alpha blending config
     };
 
 public:
@@ -112,14 +107,16 @@ public:
     void CreateFences(VkFence* fences, uint32_t amount, bool signaled = false) const;
     void DestroyFences(VkFence* fences, uint32_t amount) const;
 
-    void CreateDescriptorSetLayout();
+    void CreateDescriptorPool(const std::vector<DescriptorInfo>& descriptor_infos);
+    void CreateDescriptorSetLayout(const std::vector<DescriptorInfo>& descriptor_infos);
     void CreateDescriptorSets();
     void DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_IN_FLIGHT>& ubo_buffers,
                               VkDeviceSize offset,
                               VkDeviceSize size_per_buffer) const;
     void DescriptorSetBindImage2D(const Image2DViewer& viewer) const;
     // Create "PipelineSettings" struct and pass everything as an argument
-    void CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_config);
+    void CreateGraphicsPipeline(const PipelineResources& pipeline_config);
+    void DestroyGraphicsPipeline();
 
 private:
     VkInstance m_instance = VK_NULL_HANDLE;
@@ -139,7 +136,9 @@ private:
     std::vector<VkImageView> m_swapChainImageViews;
 
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
+    VkDescriptorPool m_descriptorPool;
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> m_descriptorSets;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 
@@ -150,9 +149,6 @@ private:
     std::vector<VkCommandBuffer> m_graphicsCmdBuffers;
     std::vector<VkCommandBuffer> m_transferCmdBuffers;
 
-    VkDescriptorPool m_descriptorPool;
-    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> m_descriptorSets;
-
     GPUImage m_depthImage;
     VkImageView m_depthImageView = VK_NULL_HANDLE;
 
@@ -160,7 +156,7 @@ private:
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
     std::vector<VkFence> m_inFlightFences;
 
-    GraphicsPipelineConfig m_pipelineConfig;
+    PipelineResources m_pipelineConfig;
     uint32_t m_currentFrameIndex = 0;  // 0 -> MAX_FRAMES_IN_FLIGHT - 1
     bool m_framebufferResized = false;
     GLFWwindow* m_window;
@@ -209,8 +205,6 @@ private:
     void _CreateCommandBuffers();
     void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index) const;
 
-    void _CreateDescriptorPool();
-
     MLC_NODISCARD VkFormat _FindSupportedFormat(const std::vector<VkFormat>& candidates,
                                                 VkImageTiling tiling,
                                                 VkFormatFeatureFlags features) const;
@@ -228,8 +222,8 @@ private:
                                                VkFormat format,
                                                VkImageAspectFlags aspectFlags) const;
     MLC_NODISCARD uint32_t _FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) const;
-    MLC_NODISCARD VkCommandBuffer _BeginSingleUseCommands() const;
-    void _EndSingleUseCommands(VkCommandBuffer& command_buffer, uint32_t family_index) const;
+    MLC_NODISCARD VkCommandBuffer _BeginSingleUseCommands(const VkCommandPool& command_pool) const;
+    void _EndSingleUseCommands(VkCommandBuffer& command_buffer, const VkCommandPool& command_pool) const;
 };
 
 MLC_NAMESPACE_END

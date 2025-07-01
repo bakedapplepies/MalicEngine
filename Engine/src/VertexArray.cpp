@@ -1,6 +1,7 @@
 #include "Engine/VertexArray.h"
 
 #include <array>
+
 #include "Engine/core/Assert.h"
 
 MLC_NAMESPACE_START
@@ -55,32 +56,41 @@ VertexArray::~VertexArray()
     // Note: When performing move semantics, buffer handles with value VK_NULL_HANDLE
     // can still be safely called with vkDestroyBuffer, but of course it can't be
     // used with other functions, which can prevent implicitly ownership of buffers
-    m_vulkanManager->DeallocateBuffer(m_vertexBuffer);
-    m_vulkanManager->DeallocateBuffer(m_indexBuffer);
+    if (m_vulkanManager)
+    {
+        m_vulkanManager->DeallocateBuffer(m_vertexBuffer);
+        m_vulkanManager->DeallocateBuffer(m_indexBuffer);
+    }
 }
 
 VertexArray::VertexArray(VertexArray&& other) noexcept
 {
-    other.m_vulkanManager = m_vulkanManager;
-    other.m_binding = m_binding;
-    other.m_verticesCount = m_verticesCount;
-    other.m_vertexBuffer = std::move(m_vertexBuffer);
+    m_vulkanManager = other.m_vulkanManager;
+    m_binding = other.m_binding;
+    m_verticesCount = other.m_verticesCount;
+    m_indicesCount = other.m_indicesCount;
+    m_vertexBuffer = std::move(other.m_vertexBuffer);
+    m_indexBuffer = std::move(other.m_indexBuffer);
 
-    m_vulkanManager = nullptr;
-    m_binding = static_cast<uint32_t>(-1);
-    m_verticesCount = static_cast<uint32_t>(-1);
+    other.m_vulkanManager = nullptr;
+    other.m_binding = static_cast<uint32_t>(-1);
+    other.m_verticesCount = static_cast<uint32_t>(-1);
+    other.m_indicesCount = static_cast<uint32_t>(-1);
 }
 
 VertexArray& VertexArray::operator=(VertexArray&& other) noexcept
 {
-    other.m_vulkanManager = m_vulkanManager;
-    other.m_binding = m_binding;
-    other.m_verticesCount = m_verticesCount;
-    other.m_vertexBuffer = std::move(m_vertexBuffer);
+    m_vulkanManager = other.m_vulkanManager;
+    m_binding = other.m_binding;
+    m_verticesCount = other.m_verticesCount;
+    m_indicesCount = other.m_indicesCount;
+    m_vertexBuffer = std::move(other.m_vertexBuffer);
+    m_indexBuffer = std::move(other.m_indexBuffer);
     
-    m_vulkanManager = nullptr;
-    m_binding = static_cast<uint32_t>(-1);
-    m_verticesCount = static_cast<uint32_t>(-1);
+    other.m_vulkanManager = nullptr;
+    other.m_binding = static_cast<uint32_t>(-1);
+    other.m_verticesCount = static_cast<uint32_t>(-1);
+    other.m_indicesCount = static_cast<uint32_t>(-1);
 
     return *this;
 }

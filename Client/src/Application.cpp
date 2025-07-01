@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <vector>
-#include <memory>
 #include <fmt/format.h>
 
 #define GLM_FORCE_RADIANS
@@ -39,24 +38,21 @@ Application::Application(Malic::MalicEngine::WindowInfo window_info)
 
 void Application::Run()
 {
-    using namespace MalicClient;
-
-    m_applicationData = ApplicationData {
-        .camera = MalicClient::Camera(
-            glm::vec3(0.0f, 0.0f, 1.0f),   // position
-            glm::vec3(0.0f, 0.0f, -1.0f),  // direction
-            0.1f,                          // near
-            10.0f,                         // far
-            45.0f                          // fov in degrees
-        )
-    };
-    m_engine.SetUserPointer(&m_applicationData);
+    m_applicationData = std::make_unique<ApplicationData>();
+    m_applicationData->camera = MalicClient::Camera(
+        glm::vec3(0.0f, 0.0f, 1.0f),   // position
+        glm::vec3(0.0f, 0.0f, -1.0f),  // direction
+        0.1f,                          // near
+        10.0f,                         // far
+        45.0f                          // fov in degrees
+    );
+    m_engine.SetUserPointer(static_cast<void*>(m_applicationData.get()));
     m_engine.Run();
 }
 
 void Application::ShutDown()
 {
-    m_applicationData = ApplicationData {};
+    m_applicationData.reset();
     m_engine.ShutDown();
 }
 
@@ -69,7 +65,7 @@ void MalicEntry(Malic::MalicEngine* engine)
     engine->HideCursor();
 
     ApplicationData* myData = static_cast<ApplicationData*>(engine->GetUserPointer());
-    Malic::VulkanManager* vulkanManager = engine->GetMutVulkanManager();
+
     const std::vector<Malic::Vertex> vertices {
         Malic::Vertex {
             .position = { -0.5f, 0.5f, 0.0f },
@@ -119,34 +115,39 @@ void MalicEntry(Malic::MalicEngine* engine)
         4, 6, 7
     };
 
-    myData->vertexArrays.emplace_back(
-        vulkanManager,
-        0,  // binding
-        vertices,
-        indices
-    );
-
+    myData->vertexArrays.push_back(engine->CreateVertexArray(0, vertices, indices));
+    
     std::filesystem::path vertPath = "../../Engine/resources/shaders/bin/default_vert.spv";
     std::filesystem::path fragPath = "../../Engine/resources/shaders/bin/default_frag.spv";
-    Malic::Shader defaultShader(
-        vulkanManager,
+    Malic::Shader defaultShader = engine->CreateShader(
         vertPath.string(),
         fragPath.string()
     );
 
-    vulkanManager->CreateDescriptorSetLayout();
-    vulkanManager->CreateDescriptorSets();
+    std::vector<Malic::DescriptorInfo> descriptorInfos;
+    descriptorInfos.push_back(Malic::DescriptorInfo {
+        .type = Malic::DescriptorTypes::UNIFORM_BUFFER,
+        .stageFlags = Malic::ShaderStages::VERTEX_BIT,
+        .binding = 0,
+        .count = 1
+    });
+    descriptorInfos.push_back(Malic::DescriptorInfo {
+        .type = Malic::DescriptorTypes::COMBINED_IMAGE_SAMPLER,
+        .stageFlags = Malic::ShaderStages::FRAGMENT_BIT,
+        .binding = 1,
+        .count = 1
+    });
+    engine->CreateDescriptors(descriptorInfos);
 
-    Malic::VulkanManager::GraphicsPipelineConfig pipelineConfig
+    Malic::PipelineResources pipelineConfig
     {
         .shader = &defaultShader,
-        .vertexArrays = &myData->vertexArrays
+        .vertexArrays = &myData->vertexArrays.at(0)
     };
-    vulkanManager->CreateGraphicsPipeline(pipelineConfig);
+    engine->AssignPipeline(pipelineConfig);
 
-    myData->uniformBuffer = std::make_unique<Malic::UniformBuffer>(vulkanManager, 0, sizeof(MVP_UBO));
-
-    myData->texture = std::make_unique<Malic::Texture2D>(vulkanManager, "../../Engine/resources/images/hamster.jpg");
+    myData->uniformBuffer = engine->CreateUBO(0, sizeof(MVP_UBO));
+    myData->texture = engine->CreateTexture2D("../../Engine/resources/images/hamster.jpg");
 }
 
 void MalicUpdate(Malic::MalicEngine* engine, float delta_time)
@@ -172,5 +173,5 @@ void MalicUpdate(Malic::MalicEngine* engine, float delta_time)
     mvpUBOData.view = view;
     mvpUBOData.projection = projection;
 
-    myData->uniformBuffer->UpdateData(&mvpUBOData, sizeof(MVP_UBO));
+    myData->uniformBuffer.UpdateData(&mvpUBOData, sizeof(MVP_UBO));
 }

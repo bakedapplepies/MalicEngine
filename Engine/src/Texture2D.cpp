@@ -46,8 +46,31 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const char* path)
 
 Texture2D::~Texture2D()
 {
-    m_vulkanManager->DestroyImage2DViewer(m_viewer);
-    m_vulkanManager->DeallocateImage2D(m_image);
+    if (m_vulkanManager)
+    {
+        m_vulkanManager->DestroyImage2DViewer(m_viewer);
+        m_vulkanManager->DeallocateImage2D(m_image);
+    }
+}
+
+Texture2D::Texture2D(Texture2D&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_image = std::move(other.m_image);
+    m_viewer = std::move(other.m_viewer);
+
+    other.m_vulkanManager = nullptr;
+}
+
+Texture2D& Texture2D::operator=(Texture2D&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_image = std::move(other.m_image);
+    m_viewer = std::move(other.m_viewer);
+
+    other.m_vulkanManager = nullptr;
+
+    return *this;
 }
 
 MLC_NAMESPACE_END

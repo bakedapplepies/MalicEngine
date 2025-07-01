@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "Engine/Malic.h"
 
 #include "Client/Core.h"
@@ -17,7 +19,7 @@ public:
     void ShutDown();
 
 private:
-    ApplicationData m_applicationData;
+    std::unique_ptr<ApplicationData> m_applicationData;
     Malic::MalicEngine m_engine;
 };
     

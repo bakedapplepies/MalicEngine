@@ -1,0 +1,18 @@
+#pragma once
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#include "Engine/core/Defines.h"
+
+MLC_NAMESPACE_START
+
+enum class ShaderStages
+{
+    VERTEX_BIT = VK_SHADER_STAGE_VERTEX_BIT,
+    FRAGMENT_BIT = VK_SHADER_STAGE_FRAGMENT_BIT,
+    GEOMETRY_BIT = VK_SHADER_STAGE_GEOMETRY_BIT,
+    COMPUTE_BIT = VK_SHADER_STAGE_COMPUTE_BIT
+};
+
+MLC_NAMESPACE_END

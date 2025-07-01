@@ -10,8 +10,13 @@ MLC_NAMESPACE_START
 class Texture2D
 {
 public:
+    Texture2D() = default;
     Texture2D(const VulkanManager* vulkan_manager, const char* path);
     ~Texture2D();
+    Texture2D(const Texture2D&) = delete;
+    Texture2D& operator=(const Texture2D&) = delete;
+    Texture2D(Texture2D&& other) noexcept;
+    Texture2D& operator=(Texture2D&& other) noexcept;
 
 private:
     const VulkanManager* m_vulkanManager = nullptr;

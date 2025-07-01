@@ -18,9 +18,13 @@ friend class VulkanManager;
 public:
     Shader(const VulkanManager* vulkan_manager, const std::string& vert_path, const std::string& frag_path);
     ~Shader();
+    Shader(const Shader&) = delete;
+    Shader& operator=(const Shader&) = delete;
+    Shader(Shader&& other) noexcept;
+    Shader& operator=(Shader&& other) noexcept;
 
 private:
-    const VulkanManager* const m_vulkanManager = nullptr;
+    const VulkanManager* m_vulkanManager = nullptr;
     VkShaderModule m_vertShaderModule = VK_NULL_HANDLE;
     VkShaderModule m_fragShaderModule = VK_NULL_HANDLE;
 

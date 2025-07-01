@@ -13,6 +13,7 @@ class UniformBuffer
 {
 public:
     // Note: UBO's will probably have to idea about types, only the data inside the pointer (void*)
+    UniformBuffer() = default;
     UniformBuffer(const VulkanManager* vulkan_manager, uint32_t binding, VkDeviceSize size);
     ~UniformBuffer();
     UniformBuffer(const UniformBuffer&) = delete;

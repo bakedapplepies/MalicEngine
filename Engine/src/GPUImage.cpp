@@ -14,24 +14,24 @@ GPUImage::~GPUImage()
 
 GPUImage::GPUImage(GPUImage&& other) noexcept
 {
-    other.m_handle = m_handle;
-    other.m_memory = m_memory;
-    other.m_properties = m_properties;
+    m_handle = other.m_handle;
+    m_memory = other.m_memory;
+    m_properties = other.m_properties;
 
-    m_handle = VK_NULL_HANDLE;
-    m_memory = VK_NULL_HANDLE;
-    m_properties = 0;
+    other.m_handle = VK_NULL_HANDLE;
+    other.m_memory = VK_NULL_HANDLE;
+    other.m_properties = 0;
 }
 
 GPUImage& GPUImage::operator=(GPUImage&& other) noexcept
 {
-    other.m_handle = m_handle;
-    other.m_memory = m_memory;
-    other.m_properties = m_properties;
+    m_handle = other.m_handle;
+    m_memory = other.m_memory;
+    m_properties = other.m_properties;
 
-    m_handle = VK_NULL_HANDLE;
-    m_memory = VK_NULL_HANDLE;
-    m_properties = 0;
+    other.m_handle = VK_NULL_HANDLE;
+    other.m_memory = VK_NULL_HANDLE;
+    other.m_properties = 0;
 
     return *this;
 }

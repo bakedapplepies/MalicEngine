@@ -14,20 +14,20 @@ Image2DViewer::~Image2DViewer()
 
 Image2DViewer::Image2DViewer(Image2DViewer&& other) noexcept
 {
-    other.m_imageView = m_imageView;
-    other.m_sampler = m_sampler;
+    m_imageView = other.m_imageView;
+    m_sampler = other.m_sampler;
 
-    m_imageView = VK_NULL_HANDLE;
-    m_sampler = VK_NULL_HANDLE;
+    other.m_imageView = VK_NULL_HANDLE;
+    other.m_sampler = VK_NULL_HANDLE;
 }
 
 Image2DViewer& Image2DViewer::operator=(Image2DViewer&& other) noexcept
 {
-    other.m_imageView = m_imageView;
-    other.m_sampler = m_sampler;
+    m_imageView = other.m_imageView;
+    m_sampler = other.m_sampler;
 
-    m_imageView = VK_NULL_HANDLE;
-    m_sampler = VK_NULL_HANDLE;
+    other.m_imageView = VK_NULL_HANDLE;
+    other.m_sampler = VK_NULL_HANDLE;
 
     return *this;
 }

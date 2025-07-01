@@ -42,7 +42,6 @@ void VulkanManager::Init(GLFWwindow* window)
     _CreateSwapChain();
     _CreateSwapChainImageViews();
     _CreateRenderPass();
-    _CreateDescriptorPool();
     _CreateCommandPools();
     _CreateCommandBuffers();
     _CreateDepthResources();
@@ -268,14 +267,14 @@ void VulkanManager::UploadBuffer(const GPUBuffer& buffer, const void* data, size
 
 void VulkanManager::CopyBuffer(const GPUBuffer& src, const GPUBuffer& dst, VkDeviceSize size) const
 {
-    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands();
+    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands(m_transferCmdPool);
     VkBufferCopy copyRegion {
         .srcOffset = 0,
         .dstOffset = 0,
         .size = size
     };
     vkCmdCopyBuffer(copyCmdBuffer, src.m_handle, dst.m_handle, 1, &copyRegion);
-    _EndSingleUseCommands(copyCmdBuffer, m_queueFamilyIndices.transferFamily.value());
+    _EndSingleUseCommands(copyCmdBuffer, m_transferCmdPool);
 }
 
 void* VulkanManager::GetBufferMapping(const GPUBuffer& buffer,
@@ -357,7 +356,7 @@ void VulkanManager::TransitionImageLayout(const GPUImage& image,
                                            VkImageLayout old_layout,
                                            VkImageLayout new_layout) const
 {
-    VkCommandBuffer commandBuffer = _BeginSingleUseCommands();
+    VkCommandBuffer commandBuffer = _BeginSingleUseCommands(m_graphicsCmdPool);
     VkImageMemoryBarrier imageBarrier {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext = VK_NULL_HANDLE,
@@ -423,7 +422,7 @@ void VulkanManager::TransitionImageLayout(const GPUImage& image,
                          0, nullptr,
                          0, nullptr,
                          1, &imageBarrier);
-    _EndSingleUseCommands(commandBuffer, m_queueFamilyIndices.graphicsFamily.value());
+    _EndSingleUseCommands(commandBuffer, m_graphicsCmdPool);
 }
 
 void VulkanManager::CopyBufferToImage(const GPUBuffer& src,
@@ -431,7 +430,7 @@ void VulkanManager::CopyBufferToImage(const GPUBuffer& src,
                                       uint32_t width,
                                       uint32_t height) const
 {
-    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands();
+    VkCommandBuffer copyCmdBuffer = _BeginSingleUseCommands(m_transferCmdPool);
     VkBufferImageCopy region {
         .bufferOffset = 0,
         .bufferRowLength = 0,
@@ -455,7 +454,7 @@ void VulkanManager::CopyBufferToImage(const GPUBuffer& src,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1,
                            &region);
-    _EndSingleUseCommands(copyCmdBuffer, m_queueFamilyIndices.transferFamily.value());
+    _EndSingleUseCommands(copyCmdBuffer, m_transferCmdPool);
 }
 
 void VulkanManager::CreateImage2DViewer(Image2DViewer& viewer, const GPUImage& image, VkFormat format) const
@@ -549,23 +548,47 @@ void VulkanManager::DestroyFences(VkFence* fences, uint32_t amount) const
     }
 }
 
-void VulkanManager::CreateDescriptorSetLayout()
+void VulkanManager::CreateDescriptorPool(const std::vector<DescriptorInfo>& descriptor_infos)
 {
-    VkDescriptorSetLayoutBinding uboLayoutBinding {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = nullptr  // related to sampler-related descriptors
+    std::vector<VkDescriptorPoolSize> poolSizes;
+    poolSizes.resize(descriptor_infos.size());
+    for (uint32_t i = 0; i < descriptor_infos.size(); i++)
+    {
+        poolSizes[i] = VkDescriptorPoolSize {
+            .type = static_cast<VkDescriptorType>(descriptor_infos[i].type),
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+        };
+    }
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .maxSets = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data()
     };
-    VkDescriptorSetLayoutBinding samplerLayoutBinding {
-        .binding = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .pImmutableSamplers = nullptr
-    };
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
+    VkResult result = vkCreateDescriptorPool(m_device,
+                                             &descriptorPoolCreateInfo,
+                                             MLC_VULKAN_ALLOCATOR,
+                                             &m_descriptorPool);
+    MLC_ASSERT(result == VK_SUCCESS, "Failed to creat descriptor pool.");
+}
+
+void VulkanManager::CreateDescriptorSetLayout(const std::vector<DescriptorInfo>& descriptor_infos)
+{
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    bindings.resize(descriptor_infos.size());
+    for (uint32_t i = 0; i < descriptor_infos.size(); i++)
+    {
+        bindings[i] = VkDescriptorSetLayoutBinding {
+            .binding = descriptor_infos[i].binding,
+            .descriptorType = static_cast<VkDescriptorType>(descriptor_infos[i].type),
+            .descriptorCount = descriptor_infos[i].count,
+            .stageFlags = static_cast<VkShaderStageFlags>(descriptor_infos[i].stageFlags),
+            .pImmutableSamplers = VK_NULL_HANDLE  // related to sampler-related descriptors
+        };
+    }
 
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -651,7 +674,7 @@ void VulkanManager::DescriptorSetBindImage2D(const Image2DViewer& viewer) const
     }
 }
 
-void VulkanManager::CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_config)
+void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_config)
 {
     // ----- Programmable stages of the pipeline -----
     
@@ -709,9 +732,9 @@ void VulkanManager::CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_conf
     // Vertex input
     // TODO
     VkVertexInputBindingDescription bindingDesc =
-        pipeline_config.vertexArrays->at(0).GetBindingDescription();
+        pipeline_config.vertexArrays->GetBindingDescription();
     std::array<VkVertexInputAttributeDescription, 3> attribDescs =
-        pipeline_config.vertexArrays->at(0).GetAttribDescriptions();
+        pipeline_config.vertexArrays->GetAttribDescriptions();
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
@@ -845,6 +868,12 @@ void VulkanManager::CreateGraphicsPipeline(GraphicsPipelineConfig& pipeline_conf
     
     result = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, MLC_VULKAN_ALLOCATOR, &m_graphicsPipeline);
     MLC_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline.");
+}
+
+void VulkanManager::DestroyGraphicsPipeline()
+{
+    vkDestroyPipeline(m_device, m_graphicsPipeline, MLC_VULKAN_ALLOCATOR);
+    vkDestroyPipelineLayout(m_device, m_pipelineLayout, MLC_VULKAN_ALLOCATOR);
 }
 
 MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
@@ -1556,11 +1585,11 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    const std::vector<VertexArray>* vertexArrays = m_pipelineConfig.vertexArrays;
-    std::array<VkBuffer, 1> vertexBuffers = { vertexArrays->at(0).GetVertexBuffer().m_handle };
+    const VertexArray* vertexArray = m_pipelineConfig.vertexArrays;
+    std::array<VkBuffer, 1> vertexBuffers = { vertexArray->GetVertexBuffer().m_handle };
     std::array<VkDeviceSize, 1> offsets = { 0 }; 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());
-    vkCmdBindIndexBuffer(command_buffer, vertexArrays->at(0).GetIndexBuffer().m_handle, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(command_buffer, vertexArray->GetIndexBuffer().m_handle, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindDescriptorSets(command_buffer,
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_pipelineLayout,
@@ -1571,7 +1600,7 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
                             nullptr);
 
     vkCmdDrawIndexed(command_buffer,
-                     vertexArrays->at(0).GetIndicesCount(),
+                     vertexArray->GetIndicesCount(),
                      1,
                      0,
                      0,
@@ -1581,34 +1610,6 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 
     result = vkEndCommandBuffer(command_buffer);
     MLC_ASSERT(result == VK_SUCCESS, "Failed to record command buffer.");
-}
-
-void VulkanManager::_CreateDescriptorPool()
-{
-    std::array<VkDescriptorPoolSize, 2> poolSizes {
-        VkDescriptorPoolSize {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = MAX_FRAMES_IN_FLIGHT
-        },
-        VkDescriptorPoolSize {
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = MAX_FRAMES_IN_FLIGHT
-        }
-    };
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .pNext = VK_NULL_HANDLE,
-        .flags = 0,
-        .maxSets = MAX_FRAMES_IN_FLIGHT,
-        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-        .pPoolSizes = poolSizes.data()
-    };
-
-    VkResult result = vkCreateDescriptorPool(m_device,
-                                             &descriptorPoolCreateInfo,
-                                             MLC_VULKAN_ALLOCATOR,
-                                             &m_descriptorPool);
-    MLC_ASSERT(result == VK_SUCCESS, "Failed to creat descriptor pool.");
 }
 
 VkFormat VulkanManager::_FindSupportedFormat(const std::vector<VkFormat>& candidates,
@@ -1788,12 +1789,12 @@ uint32_t VulkanManager::_FindMemoryType(uint32_t type_filter, VkMemoryPropertyFl
     return static_cast<uint32_t>(-1);
 }
 
-VkCommandBuffer VulkanManager::_BeginSingleUseCommands() const
+VkCommandBuffer VulkanManager::_BeginSingleUseCommands(const VkCommandPool& command_pool) const
 {
     VkCommandBufferAllocateInfo allocInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = VK_NULL_HANDLE,
-        .commandPool = m_transferCmdPool,
+        .commandPool = command_pool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1
     };
@@ -1813,7 +1814,7 @@ VkCommandBuffer VulkanManager::_BeginSingleUseCommands() const
     return commandBuffer;
 }
 
-void VulkanManager::_EndSingleUseCommands(VkCommandBuffer& command_buffer, uint32_t family_index) const
+void VulkanManager::_EndSingleUseCommands(VkCommandBuffer& command_buffer, const VkCommandPool& command_pool) const
 {
     vkEndCommandBuffer(command_buffer);
 
@@ -1831,9 +1832,14 @@ void VulkanManager::_EndSingleUseCommands(VkCommandBuffer& command_buffer, uint3
     VkFence fence;
     CreateFences(&fence, 1, false);
 
-    vkQueueSubmit(m_transferQueue, 1, &submitInfo, fence);
+    VkQueue queue;
+    if (command_pool == m_graphicsCmdPool) queue = m_graphicsQueue;
+    else if (command_pool == m_transferCmdPool) queue = m_transferQueue;
+    else MLC_ASSERT(false, "Unknown command pool.");
+
+    vkQueueSubmit(queue, 1, &submitInfo, fence);
     vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX);
-    vkFreeCommandBuffers(m_device, m_transferCmdPool, 1, &command_buffer);
+    vkFreeCommandBuffers(m_device, command_pool, 1, &command_buffer);
 
     DestroyFences(&fence, 1);
 }

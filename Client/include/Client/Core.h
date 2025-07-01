@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <memory>
+
 #include "Client/Camera.h"
 #include "Engine/VertexArray.h"
 #include "Engine/UniformBuffer.h"
@@ -10,11 +10,20 @@
 namespace MalicClient
 {
 
-struct ApplicationData
+class ApplicationData
 {
+public:
+    ApplicationData() = default;
+    ~ApplicationData() = default;
+    ApplicationData(const ApplicationData&) = delete;
+    ApplicationData& operator=(const ApplicationData&) = delete;
+    ApplicationData(ApplicationData&& other) noexcept;
+    ApplicationData& operator=(ApplicationData&& other) noexcept;
+
+public:
     std::vector<Malic::VertexArray> vertexArrays;
-    std::unique_ptr<Malic::UniformBuffer> uniformBuffer;
-    std::unique_ptr<Malic::Texture2D> texture;
+    Malic::UniformBuffer uniformBuffer;
+    Malic::Texture2D texture;
     
     MalicClient::Camera camera;
 };

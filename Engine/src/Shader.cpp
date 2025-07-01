@@ -23,8 +23,35 @@ Shader::Shader(const VulkanManager* vulkan_manager, const std::string& vert_path
 
 Shader::~Shader()
 {
-    m_vulkanManager->DestroyShaderModule(m_vertShaderModule);
-    m_vulkanManager->DestroyShaderModule(m_fragShaderModule);
+    if (m_vulkanManager)
+    {
+        m_vulkanManager->DestroyShaderModule(m_vertShaderModule);
+        m_vulkanManager->DestroyShaderModule(m_fragShaderModule);
+    }
+}
+
+Shader::Shader(Shader&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_vertShaderModule = other.m_vertShaderModule;
+    m_fragShaderModule = other.m_fragShaderModule;
+
+    other.m_vulkanManager = nullptr;
+    other.m_vertShaderModule = VK_NULL_HANDLE;
+    other.m_fragShaderModule = VK_NULL_HANDLE;
+}
+
+Shader& Shader::operator=(Shader&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_vertShaderModule = other.m_vertShaderModule;
+    m_fragShaderModule = other.m_fragShaderModule;
+    
+    other.m_vulkanManager = nullptr;
+    other.m_vertShaderModule = VK_NULL_HANDLE;
+    other.m_fragShaderModule = VK_NULL_HANDLE;
+    
+    return *this;
 }
 
 std::vector<char> Shader::_ReadFile(std::ifstream& file)

@@ -14,20 +14,24 @@ GPUBuffer::~GPUBuffer()
 
 GPUBuffer::GPUBuffer(GPUBuffer&& other) noexcept
 {
-    other.m_handle = m_handle;
-    other.m_memory = m_memory;
+    m_handle = other.m_handle;
+    m_memory = other.m_memory;
+    m_properties = other.m_properties;
 
-    m_handle = VK_NULL_HANDLE;
-    m_memory = VK_NULL_HANDLE;
+    other.m_handle = VK_NULL_HANDLE;
+    other.m_memory = VK_NULL_HANDLE;
+    other.m_properties = 0;
 }
 
 GPUBuffer& GPUBuffer::operator=(GPUBuffer&& other) noexcept
 {
-    other.m_handle = m_handle;
-    other.m_memory = m_memory;
+    m_handle = other.m_handle;
+    m_memory = other.m_memory;
+    m_properties = other.m_properties;
 
-    m_handle = VK_NULL_HANDLE;
-    m_memory = VK_NULL_HANDLE;
+    other.m_handle = VK_NULL_HANDLE;
+    other.m_memory = VK_NULL_HANDLE;
+    other.m_properties = 0;
 
     return *this;
 }

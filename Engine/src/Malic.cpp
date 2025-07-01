@@ -5,6 +5,7 @@
 #include "Engine/core/Logging.h"
 #include "Engine/MalicEntry.h"
 
+// TODO: ASAN NOT WORKING WELL WITH VULKAN
 #ifndef MLC_ASAN_DETECT_LEAKS
 #   ifdef __cplusplus
 extern "C"
@@ -56,9 +57,40 @@ void* MalicEngine::GetUserPointer() const
     return m_userData;
 }
 
-VulkanManager* MalicEngine::GetMutVulkanManager()
+VertexArray MalicEngine::CreateVertexArray(uint32_t binding,
+                                           const std::vector<Vertex>& vertices,
+                                           const std::vector<uint16_t>& indices) const
 {
-    return &m_vulkanManager;
+    return VertexArray(&m_vulkanManager, binding, vertices, indices);
+}
+
+Shader MalicEngine::CreateShader(const std::string& vert_path, const std::string& frag_path) const
+{
+    return Shader(&m_vulkanManager, vert_path, frag_path);
+}
+
+void MalicEngine::CreateDescriptors(const std::vector<DescriptorInfo>& descriptor_infos)
+{
+    // TODO: Might have to delete and recreate descriptors if we're calling this function again
+    m_vulkanManager.CreateDescriptorPool(descriptor_infos);
+    m_vulkanManager.CreateDescriptorSetLayout(descriptor_infos);
+    m_vulkanManager.CreateDescriptorSets();
+}
+
+Texture2D MalicEngine::CreateTexture2D(const char* path) const
+{
+    return Texture2D(&m_vulkanManager, path);
+}
+
+UniformBuffer MalicEngine::CreateUBO(uint32_t binding, VkDeviceSize size) const
+{
+    return UniformBuffer(&m_vulkanManager, binding, size);
+}
+
+void MalicEngine::AssignPipeline(const Malic::PipelineResources& pipeline_config)
+{
+    m_vulkanManager.DestroyGraphicsPipeline();
+    m_vulkanManager.CreateGraphicsPipeline(pipeline_config);
 }
 
 void MalicEngine::Run()

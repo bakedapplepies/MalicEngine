@@ -20,10 +20,33 @@ UniformBuffer::UniformBuffer(const VulkanManager* vulkan_manager, uint32_t bindi
 
 UniformBuffer::~UniformBuffer()
 {
-    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    if (m_vulkanManager)
     {
-        m_vulkanManager->DeallocateBuffer(m_buffers[i]);
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            m_vulkanManager->DeallocateBuffer(m_buffers[i]);
+        }
     }
+}
+
+UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_buffers = std::move(other.m_buffers);
+    m_mappedMemories = std::move(other.m_mappedMemories);
+
+    other.m_vulkanManager = nullptr;
+}
+
+UniformBuffer& UniformBuffer::operator=(UniformBuffer&& other) noexcept
+{
+    m_vulkanManager = other.m_vulkanManager;
+    m_buffers = std::move(other.m_buffers);
+    m_mappedMemories = std::move(other.m_mappedMemories);
+
+    other.m_vulkanManager = nullptr;
+
+    return *this;
 }
 
 void UniformBuffer::UpdateData(const void* data, VkDeviceSize size) const
