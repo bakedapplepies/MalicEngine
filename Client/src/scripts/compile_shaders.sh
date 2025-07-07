@@ -1,5 +1,5 @@
 #!/bin/zsh
-cd ../resources/shaders/
+cd ../../resources/shaders/
 if [[ ! -d "bin" ]]
 then
     mkdir bin

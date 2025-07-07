@@ -2,7 +2,9 @@
 
 #include <iostream>
 #include <thread>
+
 #include <fmt/format.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -133,35 +135,35 @@ MLC_NAMESPACE_END
 
 #if MLC_LOG_FATAL_ENABLED == 1
 #   define MLC_FATAL(...) \
-        Malic::__Log(LogLevel::LVL_FATAL, __FILE__, __LINE__, __VA_ARGS__)
+        Malic::__Log(Malic::LogLevel::LVL_FATAL, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #   define MLC_FATAL(...)
 #endif
 
 #if MLC_LOG_ERROR_ENABLED == 1
 #   define MLC_ERROR(...) \
-        Malic::__Log(LogLevel::LVL_ERROR, __FILE__, __LINE__, __VA_ARGS__)
+        Malic::__Log(Malic::LogLevel::LVL_ERROR, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #   define MLC_ERROR(...)
 #endif
 
 #if MLC_LOG_WARN_ENABLED == 1
 #   define MLC_WARN(...) \
-        Malic::__Log(LogLevel::LVL_WARN, __FILE__, __LINE__, __VA_ARGS__)
+        Malic::__Log(Malic::LogLevel::LVL_WARN, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #   define MLC_WARN(...)
 #endif
 
 #if MLC_LOG_INFO_ENABLED == 1
 #   define MLC_INFO(...) \
-        Malic::__Log(LogLevel::LVL_INFO, __FILE__, __LINE__, __VA_ARGS__)
+        Malic::__Log(Malic::LogLevel::LVL_INFO, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #   define MLC_INFO(...)
 #endif
 
 #if MLC_LOG_DEBUG_ENABLED == 1
 #   define MLC_DEBUG(...) \
-        Malic::__Log(LogLevel::LVL_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
+        Malic::__Log(Malic::LogLevel::LVL_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #   define MLC_DEBUG(...)
 #endif

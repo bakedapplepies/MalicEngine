@@ -18,6 +18,8 @@ public:
     Image2DViewer(Image2DViewer&& other) noexcept;
     Image2DViewer& operator=(Image2DViewer&& other) noexcept;
 
+    bool IsUsable() const;
+
 private:
     VkImageView m_imageView = VK_NULL_HANDLE;
     VkSampler m_sampler = VK_NULL_HANDLE;

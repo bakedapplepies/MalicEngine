@@ -1,8 +1,10 @@
 #include "Engine/Texture2D.h"
 
-#include "Engine/core/Assert.h"
-
 #include <stb/stb_image.h>
+
+#include "Engine/core/Assert.h"
+#include "Engine/core/Logging.h"
+#include "Engine/VulkanManager.h"
 
 MLC_NAMESPACE_START
 
@@ -10,6 +12,7 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const char* path)
     : m_vulkanManager(vulkan_manager)
 {
     int width, height, channels;
+    MLC_INFO("{}", path);
     stbi_uc* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
 
     MLC_ASSERT(pixels != nullptr, "Failed to load texture image data.");
@@ -71,6 +74,11 @@ Texture2D& Texture2D::operator=(Texture2D&& other) noexcept
     other.m_vulkanManager = nullptr;
 
     return *this;
+}
+
+bool Texture2D::IsUsable() const
+{
+    return m_image.IsUsable() && m_viewer.IsUsable();
 }
 
 MLC_NAMESPACE_END

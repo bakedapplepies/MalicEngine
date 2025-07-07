@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.26.0)
 add_library(LMalicEngine
     core/Debug.cpp
     core/Defines.cpp
+    core/Filesystem.cpp
     core/Logging.cpp
     GPUBuffer.cpp
     VulkanManager.cpp
@@ -12,6 +13,8 @@ add_library(LMalicEngine
     Texture2D.cpp
     GPUImage.cpp
     Image2DViewer.cpp
+    Material.cpp
+    ResourceManager.cpp
     Renderer.cpp
     Malic.cpp
 )
@@ -29,10 +32,13 @@ if (WIN32)
         ${GLFW_INSTALL_DIR}/install/lib
         ${GLM_INSTALL_DIR}/install/lib
         ${FMT_INSTALL_DIR}/install/lib
+        ${ASSIMP_INSTALL_DIR}/install/lib
     )
     target_link_libraries(LMalicEngineDeps INTERFACE
         glfw3
         glm
+        $<IF:$<CONFIG:Debug>, assimpd, assimp>
+        $<IF:$<CONFIG:Debug>, zlibstaticd, zlibstatic>
         STB_LIBRARY
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         Vulkan::Vulkan
@@ -45,11 +51,14 @@ if (UNIX)
         ${GLFW_INSTALL_DIR}/install/lib64
         ${GLM_INSTALL_DIR}/install/lib64
         ${FMT_INSTALL_DIR}/install/lib64
+        ${ASSIMP_INSTALL_DIR}/install/lib64
     )
     target_link_libraries(LMalicEngineDeps INTERFACE
         Vulkan::Vulkan
         glfw3
         glm
+        $<IF:$<CONFIG:Debug>, assimpd, assimp>
+        $<IF:$<CONFIG:Debug>, zlibstaticd, zlibstatic>
         STB_LIBRARY
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         # dl
@@ -62,13 +71,6 @@ endif()
 target_include_directories(LMalicEngine PRIVATE
     ${MALIC_HEADERS}
 )
-
-# target_link_directories(LMalicEngine PRIVATE
-#     ${VULKAN_LIBS}
-#     ${GLFW_INSTALL_DIR}/install/lib
-#     ${GLM_INSTALL_DIR}/install/lib
-#     ${FMT_INSTALL_DIR}/install/lib
-# )
 
 target_link_libraries(LMalicEngine PRIVATE
     LMalicEngineDeps

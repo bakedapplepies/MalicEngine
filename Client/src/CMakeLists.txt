@@ -6,6 +6,7 @@ add_executable(${PROJECT_NAME}
     Application.cpp
     Input.cpp
     Camera.cpp
+    Model.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

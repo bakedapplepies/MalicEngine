@@ -1,15 +1,17 @@
 #pragma once
 
+// #include <vector>
+
 #include "Engine/core/Defines.h"
+#include "Engine/Material.h"
 
 MLC_NAMESPACE_START
 
-class Shader;
 class VertexArray;
 struct PipelineResources
 {
-    const Shader* shader = nullptr;
-    const VertexArray* vertexArrays = nullptr;
+    Material material;
+    const VertexArray* vertexArray = nullptr;
     // alpha blending config
 };
 

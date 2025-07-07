@@ -42,6 +42,50 @@ MalicEngine::MalicEngine(const WindowInfo& window_info)
     : m_windowInfo(window_info)
 {}
 
+void MalicEngine::Run()
+{
+    if (m_window)
+    {
+        MLC_ERROR("Malic Engine is already running.");
+        return;
+    }
+
+    _WindowInit();
+    m_vulkanManager.Init(m_window);
+    m_resourceManager._Init(&m_vulkanManager);
+    MalicEntry(this);
+    _MainLoop();  // Everything has to live & die inside this Loop to ensure proper resource management
+}
+
+void MalicEngine::ShutDown()
+{
+    m_resourceManager._ShutDown();
+    m_vulkanManager.ShutDown();
+    _ShutDown();
+}
+
+const ResourceManager* MalicEngine::GetResourceManager() const
+{
+    return &m_resourceManager;
+}
+
+bool MalicEngine::IsKeyPressed(uint32_t key) const
+{
+    return glfwGetKey(m_window, key) == GLFW_PRESS;
+}
+
+glm::vec2 MalicEngine::GetCursorPos() const
+{
+    double x, y;
+    glfwGetCursorPos(m_window, &x, &y);
+    return { x, y };
+}
+
+void MalicEngine::HideCursor() const
+{
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
 const MalicEngine::WindowInfo* MalicEngine::GetWindowInfo() const
 {
     return &m_windowInfo;
@@ -64,22 +108,12 @@ VertexArray MalicEngine::CreateVertexArray(uint32_t binding,
     return VertexArray(&m_vulkanManager, binding, vertices, indices);
 }
 
-Shader MalicEngine::CreateShader(const std::string& vert_path, const std::string& frag_path) const
-{
-    return Shader(&m_vulkanManager, vert_path, frag_path);
-}
-
 void MalicEngine::CreateDescriptors(const std::vector<DescriptorInfo>& descriptor_infos)
 {
     // TODO: Might have to delete and recreate descriptors if we're calling this function again
     m_vulkanManager.CreateDescriptorPool(descriptor_infos);
     m_vulkanManager.CreateDescriptorSetLayout(descriptor_infos);
     m_vulkanManager.CreateDescriptorSets();
-}
-
-Texture2D MalicEngine::CreateTexture2D(const char* path) const
-{
-    return Texture2D(&m_vulkanManager, path);
 }
 
 UniformBuffer MalicEngine::CreateUBO(uint32_t binding, VkDeviceSize size) const
@@ -91,43 +125,6 @@ void MalicEngine::AssignPipeline(const Malic::PipelineResources& pipeline_config
 {
     m_vulkanManager.DestroyGraphicsPipeline();
     m_vulkanManager.CreateGraphicsPipeline(pipeline_config);
-}
-
-void MalicEngine::Run()
-{
-    if (m_window)
-    {
-        MLC_ERROR("Malic Engine is already running.");
-        return;
-    }
-
-    _WindowInit();
-    m_vulkanManager.Init(m_window);
-    MalicEntry(this);
-    _MainLoop();  // Everything has to live & die inside this Loop to ensure proper resource management
-}
-
-void MalicEngine::ShutDown()
-{
-    m_vulkanManager.ShutDown();
-    _ShutDown();
-}
-
-bool MalicEngine::IsKeyPressed(uint32_t key) const
-{
-    return glfwGetKey(m_window, key) == GLFW_PRESS;
-}
-
-glm::vec2 MalicEngine::GetCursorPos() const
-{
-    double x, y;
-    glfwGetCursorPos(m_window, &x, &y);
-    return { x, y };
-}
-
-void MalicEngine::HideCursor() const
-{
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 void MalicEngine::_WindowInit()

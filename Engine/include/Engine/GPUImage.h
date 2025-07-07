@@ -18,7 +18,7 @@ public:
     GPUImage(GPUImage&& other) noexcept;
     GPUImage& operator=(GPUImage&& other) noexcept;
 
-    bool IsUsable() const;
+    MLC_NODISCARD bool IsUsable() const;
 
 private:
     VkImage m_handle = VK_NULL_HANDLE;

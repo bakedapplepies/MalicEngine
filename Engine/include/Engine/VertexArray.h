@@ -20,6 +20,7 @@ struct Vertex
 class VertexArray
 {
 public:
+    VertexArray() = default;
     VertexArray(const VulkanManager* vulkan_manager,
                 uint32_t binding,
                 const std::vector<Vertex>& vertices,
@@ -38,7 +39,7 @@ public:
     MLC_NODISCARD const GPUBuffer& GetIndexBuffer() const;
 
 private:
-    const VulkanManager* m_vulkanManager;
+    const VulkanManager* m_vulkanManager = nullptr;
     uint32_t m_binding = static_cast<uint32_t>(-1);
     uint32_t m_verticesCount = static_cast<uint32_t>(-1);
     uint32_t m_indicesCount = static_cast<uint32_t>(-1);

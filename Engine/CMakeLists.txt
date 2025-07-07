@@ -10,6 +10,7 @@ set(MALIC_HEADERS
     ${GLFW_INSTALL_DIR}/install/include
     ${GLM_INSTALL_DIR}/install/include
     ${FMT_INSTALL_DIR}/install/include
+    ${ASSIMP_INSTALL_DIR}/install/include
     ${PROJECT_SOURCE_DIR}/Engine/vendor
 CACHE INTERNAL "")
 

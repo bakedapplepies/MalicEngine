@@ -1,6 +1,5 @@
 #include "Client/Application.h"
 
-#include <filesystem>
 #include <vector>
 #include <fmt/format.h>
 
@@ -18,9 +17,10 @@
 #include "Engine/VertexArray.h"
 #include "Engine/Shader.h"
 #include "Engine/UniformBuffer.h"
-#include "Engine/Texture2D.h"
+#include "Engine/Material.h"
 
 #include "Client/Input.h"
+// #include "Client/Model.h"
 
 namespace MalicClient
 {
@@ -64,6 +64,7 @@ void MalicEntry(Malic::MalicEngine* engine)
 
     engine->HideCursor();
 
+    const Malic::ResourceManager* resourceManager = engine->GetResourceManager();
     ApplicationData* myData = static_cast<ApplicationData*>(engine->GetUserPointer());
 
     const std::vector<Malic::Vertex> vertices {
@@ -117,11 +118,11 @@ void MalicEntry(Malic::MalicEngine* engine)
 
     myData->vertexArrays.push_back(engine->CreateVertexArray(0, vertices, indices));
     
-    std::filesystem::path vertPath = "../../Client/resources/shaders/bin/default_vert.spv";
-    std::filesystem::path fragPath = "../../Client/resources/shaders/bin/default_frag.spv";
-    Malic::Shader defaultShader = engine->CreateShader(
-        vertPath.string(),
-        fragPath.string()
+    Malic::File vertFile("Client/resources/shaders/bin/default_vert.spv");
+    Malic::File fragFile("Client/resources/shaders/bin/default_frag.spv");
+    Malic::Shader defaultShader = resourceManager->GetShader(
+        vertFile,
+        fragFile
     );
 
     std::vector<Malic::DescriptorInfo> descriptorInfos;
@@ -138,16 +139,19 @@ void MalicEntry(Malic::MalicEngine* engine)
         .count = 1
     });
     engine->CreateDescriptors(descriptorInfos);
-
+    
+    Malic::Material material(defaultShader);
+    material.SetAlbedo(resourceManager->GetTexture2D(Malic::File("Client/resources/images/hamster.jpg")));
     Malic::PipelineResources pipelineConfig
     {
-        .shader = &defaultShader,
-        .vertexArrays = &myData->vertexArrays.at(0)
+        .material = material,
+        .vertexArray = &myData->vertexArrays.at(0)
     };
     engine->AssignPipeline(pipelineConfig);
 
     myData->uniformBuffer = engine->CreateUBO(0, sizeof(MVP_UBO));
-    myData->texture = engine->CreateTexture2D("../../Client/resources/images/hamster.jpg");
+
+    // Model model(engine, "../../Client/resources/models/vivian/vivian.pmx");
 }
 
 void MalicUpdate(Malic::MalicEngine* engine, float delta_time)

@@ -18,7 +18,7 @@ public:
     GPUBuffer(GPUBuffer&& other) noexcept;
     GPUBuffer& operator=(GPUBuffer&& other) noexcept;
 
-    bool IsUsable() const;
+    MLC_NODISCARD bool IsUsable() const;
 
 private:
     VkBuffer m_handle = VK_NULL_HANDLE;

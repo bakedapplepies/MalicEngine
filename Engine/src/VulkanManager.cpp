@@ -10,7 +10,7 @@
 #include "Engine/core/Debug.h"
 #include "Engine/core/Logging.h"
 #include "Engine/VertexArray.h"
-#include "Engine/Shader.h"
+#include "Engine/Material.h"
 
 MLC_NAMESPACE_START
 
@@ -27,6 +27,11 @@ void VulkanManager::Init(GLFWwindow* window)
 {
     // Note: Every vkCreateXXX has a mandatory vkDestroyXXX
     //       Resource allocated from pools (cmd buffers or descriptors) don't need this
+    if (m_window)
+    {
+        MLC_ERROR("VulkanManager already initialized.");
+        return;
+    }
     m_window = window;
 
     if (ENABLE_VALIDATION_LAYERS)
@@ -107,6 +112,8 @@ void VulkanManager::ShutDown()
     }
     vkDestroyInstance(m_instance, MLC_VULKAN_ALLOCATOR);
     m_instance = VK_NULL_HANDLE;
+
+    m_window = nullptr;
 
     MLC_INFO("Vulkan Deinitialization: Success");
 }
@@ -680,12 +687,15 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
     
     m_pipelineConfig = pipeline_config;
 
+    const VertexArray* vertexArray = pipeline_config.vertexArray;
+    const Shader* shader = pipeline_config.material.GetShader();
+
     VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = pipeline_config.shader->m_vertShaderModule,
+        .module = shader->m_vertShaderModule,
         .pName = "main",
         .pSpecializationInfo = nullptr  // this can specify constants inside the shader
     };
@@ -695,7 +705,7 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = pipeline_config.shader->m_fragShaderModule,
+        .module = shader->m_fragShaderModule,
         .pName = "main",
         .pSpecializationInfo = nullptr  // this can specify constants inside the shader
     };
@@ -732,9 +742,9 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
     // Vertex input
     // TODO
     VkVertexInputBindingDescription bindingDesc =
-        pipeline_config.vertexArrays->GetBindingDescription();
+        vertexArray->GetBindingDescription();
     std::array<VkVertexInputAttributeDescription, 3> attribDescs =
-        pipeline_config.vertexArrays->GetAttribDescriptions();
+        vertexArray->GetAttribDescriptions();
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
@@ -872,6 +882,7 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
 
 void VulkanManager::DestroyGraphicsPipeline()
 {
+    vkDeviceWaitIdle(m_device);
     vkDestroyPipeline(m_device, m_graphicsPipeline, MLC_VULKAN_ALLOCATOR);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, MLC_VULKAN_ALLOCATOR);
 }
@@ -1585,7 +1596,7 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    const VertexArray* vertexArray = m_pipelineConfig.vertexArrays;
+    const VertexArray* vertexArray = m_pipelineConfig.vertexArray;
     std::array<VkBuffer, 1> vertexBuffers = { vertexArray->GetVertexBuffer().m_handle };
     std::array<VkDeviceSize, 1> offsets = { 0 }; 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());

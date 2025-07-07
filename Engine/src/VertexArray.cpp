@@ -54,8 +54,11 @@ VertexArray::VertexArray(const VulkanManager* vulkan_manager,
 VertexArray::~VertexArray()
 {
     // Note: When performing move semantics, buffer handles with value VK_NULL_HANDLE
-    // can still be safely called with vkDestroyBuffer, but of course it can't be
-    // used with other functions, which can prevent implicitly ownership of buffers
+    // can be safely called with vkDestroyBuffer, but of course it can't be
+    // used with other functions, which can prevent implicitly ownership of buffers.
+    // Since I've made it so that if m_vulkanManager is null, other members are also null.
+    // This way we can check if we should delete resources depending on if m_vulkanManager
+    // is null.
     if (m_vulkanManager)
     {
         m_vulkanManager->DeallocateBuffer(m_vertexBuffer);
@@ -130,6 +133,7 @@ VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
     };
 }
 
+// TODO: Custom vertex attributes
 std::array<VkVertexInputAttributeDescription, 3> VertexArray::GetAttribDescriptions() const
 {
     MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");

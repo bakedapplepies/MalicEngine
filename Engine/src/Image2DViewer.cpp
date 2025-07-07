@@ -32,4 +32,10 @@ Image2DViewer& Image2DViewer::operator=(Image2DViewer&& other) noexcept
     return *this;
 }
 
+bool Image2DViewer::IsUsable() const
+{
+    return m_imageView != VK_NULL_HANDLE &&
+           m_sampler != VK_NULL_HANDLE;
+}
+
 MLC_NAMESPACE_END

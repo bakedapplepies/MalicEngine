@@ -7,10 +7,9 @@
 
 #include "core/Defines.h"
 #include "Engine/VulkanManager.h"
+#include "Engine/ResourceManager.h"
 #include "Engine/VertexArray.h"
-#include "Engine/Shader.h"
 #include "Engine/DescriptorInfo.h"
-#include "Engine/Texture2D.h"
 #include "Engine/UniformBuffer.h"
 
 MLC_NAMESPACE_START
@@ -37,6 +36,8 @@ public:
     void Run();
     void ShutDown();
 
+    MLC_NODISCARD const ResourceManager* GetResourceManager() const;
+
     MLC_NODISCARD bool IsKeyPressed(uint32_t key) const;
     MLC_NODISCARD glm::vec2 GetCursorPos() const;
     void HideCursor() const;
@@ -48,9 +49,7 @@ public:
     MLC_NODISCARD VertexArray CreateVertexArray(uint32_t binding,
                                                 const std::vector<Vertex>& vertices,
                                                 const std::vector<uint16_t>& indices) const;
-    MLC_NODISCARD Shader CreateShader(const std::string& vert_path, const std::string& frag_path) const;
     void CreateDescriptors(const std::vector<DescriptorInfo>& descriptor_infos);
-    MLC_NODISCARD Texture2D CreateTexture2D(const char* path) const;
     MLC_NODISCARD UniformBuffer CreateUBO(uint32_t binding, VkDeviceSize size) const;
     void AssignPipeline(const Malic::PipelineResources& pipeline_config);
 
@@ -58,6 +57,7 @@ private:
     const WindowInfo m_windowInfo;
     GLFWwindow* m_window = nullptr;
     VulkanManager m_vulkanManager;
+    ResourceManager m_resourceManager;
     GLFWSharedResource m_glfwSharedResource;
     void* m_userData;
 

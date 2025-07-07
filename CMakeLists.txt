@@ -20,18 +20,4 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.vscode/settings.json")
     )
 endif()
 
-if (WIN32)
-    execute_process(
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/scripts
-        COMMAND_ECHO STDOUT
-        COMMAND compile_shaders.bat
-    )
-elseif(UNIX)
-    execute_process(
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/scripts
-        COMMAND_ECHO STDOUT
-        COMMAND ./compile_shaders.sh
-    )
-endif()
-
 add_subdirectory(Client)
