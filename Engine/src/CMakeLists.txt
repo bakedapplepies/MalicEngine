@@ -37,8 +37,8 @@ if (WIN32)
     target_link_libraries(LMalicEngineDeps INTERFACE
         glfw3
         glm
-        $<IF:$<CONFIG:Debug>, assimpd, assimp>
-        $<IF:$<CONFIG:Debug>, zlibstaticd, zlibstatic>
+        assimp
+        zlibstatic
         STB_LIBRARY
         $<IF:$<CONFIG:Debug>, fmtd, fmt>
         Vulkan::Vulkan

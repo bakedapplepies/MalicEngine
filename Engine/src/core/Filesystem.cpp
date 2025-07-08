@@ -1,5 +1,7 @@
 #include "Engine/core/Filesystem.h"
 
+#include <filesystem>
+
 #include <fmt/format.h>
 
 #include "Engine/core/Assert.h"
@@ -8,10 +10,14 @@ MLC_NAMESPACE_START
 
 File::File(const char* path)
 {
-    m_path = std::filesystem::path(MLC_ROOT_DIR);
-    m_path /= path;
+    std::filesystem::path fpath;
+    fpath = std::filesystem::path(MLC_ROOT_DIR);
+    fpath /= path;
+    fpath = fpath.make_preferred();
 
-    MLC_ASSERT(m_path.has_filename(), fmt::format("{} is not a file.", path));
+    MLC_ASSERT(fpath.has_filename(), fmt::format("{} is not a file.", path));
+
+    m_path = fpath.string();
 }
 
 const char* File::GetPath() const

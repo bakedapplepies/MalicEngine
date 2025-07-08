@@ -12,7 +12,6 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const char* path)
     : m_vulkanManager(vulkan_manager)
 {
     int width, height, channels;
-    MLC_INFO("{}", path);
     stbi_uc* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
 
     MLC_ASSERT(pixels != nullptr, "Failed to load texture image data.");

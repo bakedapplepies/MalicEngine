@@ -159,7 +159,7 @@ private:
     PipelineResources m_pipelineConfig;
     uint32_t m_currentFrameIndex = 0;  // 0 -> MAX_FRAMES_IN_FLIGHT - 1
     bool m_framebufferResized = false;
-    GLFWwindow* m_window;
+    GLFWwindow* m_window = nullptr;
 
 private:
     MLC_NODISCARD std::vector<const char*> _GLFWGetRequiredExtensions();

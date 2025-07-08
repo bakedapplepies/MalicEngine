@@ -1,6 +1,6 @@
 #pragma once
 
-#include <filesystem>
+#include <string>
 
 #include "Engine/core/Defines.h"
 
@@ -19,7 +19,7 @@ public:
     MLC_NODISCARD const char* GetPath() const;
 
 private:
-    std::filesystem::path m_path;
+    std::string m_path;
 };
 
 MLC_NAMESPACE_END

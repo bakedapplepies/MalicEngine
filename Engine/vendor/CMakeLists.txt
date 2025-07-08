@@ -11,6 +11,12 @@ elseif (WIN32)
     set(LIB lib)
 endif ()
 
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(ASSIMP_ASAN ON)
+else()
+    set(ASSIMP_ASAN OFF)
+endif()
+
 add_library(STB_LIBRARY STATIC stb/stb_image.cpp)
 
 set(GLFW_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/extern/glfw CACHE INTERNAL "")
@@ -82,7 +88,7 @@ ExternalProject_Add(
         -DASSIMP_BUILD_TESTS=OFF
         -DASSIMP_INSTALL=ON
         -DASSIMP_WARNINGS_AS_ERRORS=OFF
-        -DASSIMP_ASAN=ON
+        -DASSIMP_ASAN=${ASSIMP_ASAN}
         -DASSIMP_INJECT_DEBUG_POSTFIX=OFF
         -DASSIMP_INSTALL_PDB=OFF
         -DASSIMP_BUILD_ASSIMP_VIEW=OFF
