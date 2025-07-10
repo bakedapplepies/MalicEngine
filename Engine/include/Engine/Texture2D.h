@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/core/Defines.h"
+#include "Engine/core/Filesystem.h"
 #include "Engine/GPUImage.h"
 #include "Engine/Image2DViewer.h"
 
@@ -11,7 +12,7 @@ class Texture2D
 {
 public:
     Texture2D() = default;
-    Texture2D(const VulkanManager* vulkan_manager, const char* path);
+    Texture2D(const VulkanManager* vulkan_manager, const File& file);
     ~Texture2D();
     Texture2D(const Texture2D&) = delete;
     Texture2D& operator=(const Texture2D&) = delete;

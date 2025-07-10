@@ -8,14 +8,14 @@
 
 MLC_NAMESPACE_START
 
-File::File(const char* path)
+File::File(const std::filesystem::path& path)
 {
     std::filesystem::path fpath;
     fpath = std::filesystem::path(MLC_ROOT_DIR);
     fpath /= path;
     fpath = fpath.make_preferred();
 
-    MLC_ASSERT(fpath.has_filename(), fmt::format("{} is not a file.", path));
+    MLC_ASSERT(fpath.has_filename(), fmt::format("{} is not a file.", path.string()));
 
     m_path = fpath.string();
 }

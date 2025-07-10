@@ -75,7 +75,7 @@ const Texture2D* ResourceManager::GetTexture2D(const File& file) const
 {
     if (!s_texture2DIndices[file.GetPath()])
     {
-        s_texture2Ds.emplace_back(m_vulkanManager, file.GetPath());
+        s_texture2Ds.emplace_back(m_vulkanManager, file);
         s_texture2DIndices[file.GetPath()] = s_texture2Ds.size() - 1;
     }
     return &s_texture2Ds[s_texture2DIndices[file.GetPath()]];

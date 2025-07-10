@@ -44,11 +44,11 @@ void Model::_GetMaterials(const aiScene* scene, const Malic::MalicEngine* engine
         aiString path;
         
         aiGetMaterialTexture(material, aiTextureType_DIFFUSE, 0, &path);
-        std::filesystem::path actualPath = "../../Client/resources/models/vivian";
+        std::filesystem::path actualPath = "Client/resources/models/vivian";
         actualPath /= path.C_Str();
-        std::string actuallPath = actualPath.string();
+        std::u32string actuallPath = actualPath.u32string();
         std::replace(actuallPath.begin(), actuallPath.end(), '\\', '/');
-        fmt::print("{}\n", actuallPath.c_str());
+        // fmt::print(u"{}\n", actuallPath.c_str());
         mlcMaterial.SetAlbedo(resourceManager->GetTexture2D(Malic::File(actuallPath.c_str())));
     }
 }

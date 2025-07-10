@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <filesystem>
 
 #include "Engine/core/Defines.h"
 
@@ -9,7 +10,7 @@ MLC_NAMESPACE_START
 class File
 {
 public:
-    explicit File(const char* path);
+    explicit File(const std::filesystem::path& path);
     ~File() = default;
     File(const File& file) = default;
     File& operator=(const File& file) = default;

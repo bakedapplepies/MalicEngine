@@ -3,18 +3,30 @@
 #include <stb/stb_image.h>
 
 #include "Engine/core/Assert.h"
-#include "Engine/core/Logging.h"
 #include "Engine/VulkanManager.h"
 
 MLC_NAMESPACE_START
 
-Texture2D::Texture2D(const VulkanManager* vulkan_manager, const char* path)
+// https://stackoverflow.com/questions/50403342/how-do-i-properly-use-stdstring-on-utf-8-in-c
+
+Texture2D::Texture2D(const VulkanManager* vulkan_manager, const File& file)
     : m_vulkanManager(vulkan_manager)
 {
     int width, height, channels;
-    stbi_uc* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
+    std::string s(file.GetPath());
 
-    MLC_ASSERT(pixels != nullptr, "Failed to load texture image data.");
+#ifndef _WIN32
+    FILE* f = fopen(filePath.c_str(), "rb");
+#else
+    std::wstring filePathW;
+    filePathW.resize(s.length());
+    int newSize = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), s.size(), const_cast<wchar_t *>(filePathW.c_str()), filePathW.length());
+    filePathW.resize(newSize);
+    FILE* f = _wfopen(filePathW.c_str(), L"rb");
+#endif
+
+    stbi_uc* pixels = stbi_load_from_file(f, &width, &height, &channels, STBI_rgb_alpha);
+    MLC_ASSERT(pixels != nullptr, fmt::format("Failed to load texture image data.\n{}", stbi_failure_reason()));
 
     VkDeviceSize size = width * height * 4;
 

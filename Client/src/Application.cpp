@@ -20,7 +20,7 @@
 #include "Engine/Material.h"
 
 #include "Client/Input.h"
-// #include "Client/Model.h"
+#include "Client/Model.h"
 
 namespace MalicClient
 {
@@ -141,7 +141,7 @@ void MalicEntry(Malic::MalicEngine* engine)
     engine->CreateDescriptors(descriptorInfos);
     
     Malic::Material material(defaultShader);
-    material.SetAlbedo(resourceManager->GetTexture2D(Malic::File("Client/resources/images/hamster.jpg")));
+    material.SetAlbedo(resourceManager->GetTexture2D(Malic::File("Client/resources/models/vivian/tex/颜.png")));
     Malic::PipelineResources pipelineConfig
     {
         .material = material,
