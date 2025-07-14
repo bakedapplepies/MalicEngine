@@ -138,7 +138,7 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     VkDescriptorPool m_descriptorPool;
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
-    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> m_descriptorSets;
+    std::array<VkDescriptorSet, MAX_DESCRIPTOR_SETS> m_descriptorSets;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 
@@ -162,7 +162,7 @@ private:
     GLFWwindow* m_window = nullptr;
 
 private:
-    MLC_NODISCARD std::vector<const char*> _GLFWGetRequiredExtensions();
+    MLC_NODISCARD std::vector<const char*> _GetRequiredExtensions();
     MLC_NODISCARD bool _CheckValidationLayerSupport();
     void _CreateInstance();
 
@@ -213,6 +213,8 @@ private:
     void _CreateDepthResources();
 
     void _CreateSyncObjects();
+
+    // ----- Commands -----
 
     // ----- Utility Functions -----
 

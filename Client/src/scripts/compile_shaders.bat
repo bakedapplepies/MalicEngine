@@ -1,6 +1,7 @@
 @echo off
 
-cd ../resources/shaders/
+cd ../../resources/shaders/
+@REM // TODO: If statement doesn't work
 if not exist /bin (
     mkdir bin
 )

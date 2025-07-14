@@ -13,16 +13,24 @@
 
 MLC_NAMESPACE_START
 
-constexpr std::array VALIDATION_LAYERS {
+const std::array VALIDATION_LAYERS {
     "VK_LAYER_KHRONOS_validation"  // common validation layers bundled into one
 };
 
-constexpr std::array DEVICE_EXTENSIONS {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+const std::array DEVICE_EXTENSIONS {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME
     // VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
 };
 
-constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-constexpr glm::vec3 VEC3_UP = glm::vec3(0.0f, 1.0f, 0.0f);
+const size_t MAX_PUSH_CONSTANTS_SIZE = 128;
+
+const uint32_t VERTEX_ATTRIB_INDEX_POSITION = 0;
+const uint32_t VERTEX_ATTRIB_INDEX_COLOR = 1;
+const uint32_t VERTEX_ATTRIB_INDEX_UV = 2;
+
+const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+const uint32_t MAX_DESCRIPTOR_SETS = MAX_FRAMES_IN_FLIGHT;
+const glm::vec3 VEC3_UP = glm::vec3(0.0f, 1.0f, 0.0f);
 
 MLC_NAMESPACE_END

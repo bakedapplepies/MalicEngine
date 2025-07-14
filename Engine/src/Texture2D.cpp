@@ -13,11 +13,11 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const File& file)
     : m_vulkanManager(vulkan_manager)
 {
     int width, height, channels;
-    std::string s(file.GetPath());
-
+    
 #ifndef _WIN32
-    FILE* f = fopen(filePath.c_str(), "rb");
+    FILE* f = fopen(file.c_str(), "rb");
 #else
+    std::string s(file.GetPath());
     std::wstring filePathW;
     filePathW.resize(s.length());
     int newSize = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), s.size(), const_cast<wchar_t *>(filePathW.c_str()), filePathW.length());
@@ -27,6 +27,7 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const File& file)
 
     stbi_uc* pixels = stbi_load_from_file(f, &width, &height, &channels, STBI_rgb_alpha);
     MLC_ASSERT(pixels != nullptr, fmt::format("Failed to load texture image data.\n{}", stbi_failure_reason()));
+    fclose(f);
 
     VkDeviceSize size = width * height * 4;
 
@@ -55,7 +56,7 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const File& file)
     vulkan_manager->DeallocateBuffer(stagingBuffer);
 
     vulkan_manager->CreateImage2DViewer(m_viewer, m_image, VK_FORMAT_R8G8B8A8_SRGB);
-    vulkan_manager->DescriptorSetBindImage2D(m_viewer);
+    Bind();
 }
 
 Texture2D::~Texture2D()
@@ -90,6 +91,11 @@ Texture2D& Texture2D::operator=(Texture2D&& other) noexcept
 bool Texture2D::IsUsable() const
 {
     return m_image.IsUsable() && m_viewer.IsUsable();
+}
+
+void Texture2D::Bind() const
+{
+    m_vulkanManager->DescriptorSetBindImage2D(m_viewer);
 }
 
 MLC_NAMESPACE_END

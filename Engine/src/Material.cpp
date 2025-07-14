@@ -42,6 +42,11 @@ const Shader* Material::GetShader() const
     return &m_shader;
 }
 
+const Texture2D* Material::GetAlbedo() const
+{
+    return m_albedo;
+}
+
 bool Material::IsUsable() const
 {
     return m_shader.IsUsable() && m_albedo->IsUsable();

@@ -563,18 +563,18 @@ void VulkanManager::CreateDescriptorPool(const std::vector<DescriptorInfo>& desc
     {
         poolSizes[i] = VkDescriptorPoolSize {
             .type = static_cast<VkDescriptorType>(descriptor_infos[i].type),
-            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+            .descriptorCount = MAX_DESCRIPTOR_SETS * 1u  // default 1 descriptor per descriptor set
         };
     }
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
-        .maxSets = MAX_FRAMES_IN_FLIGHT,
+        .maxSets = MAX_DESCRIPTOR_SETS,
         .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
         .pPoolSizes = poolSizes.data()
     };
-
+    // vkResetDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkDescriptorPoolResetFlags flags)
     VkResult result = vkCreateDescriptorPool(m_device,
                                              &descriptorPoolCreateInfo,
                                              MLC_VULKAN_ALLOCATOR,
@@ -614,24 +614,24 @@ void VulkanManager::CreateDescriptorSetLayout(const std::vector<DescriptorInfo>&
 
 void VulkanManager::CreateDescriptorSets()
 {
-    std::array<VkDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> layouts;
+    std::array<VkDescriptorSetLayout, MAX_DESCRIPTOR_SETS> layouts;
     layouts.fill(m_descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocateInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .descriptorPool = m_descriptorPool,
-        .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+        .descriptorSetCount = MAX_DESCRIPTOR_SETS,
         .pSetLayouts = layouts.data()
     };
 
     vkAllocateDescriptorSets(m_device, &allocateInfo, m_descriptorSets.data());
 }
 
-void VulkanManager::DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_IN_FLIGHT>& ubo_buffers,
+void VulkanManager::DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_DESCRIPTOR_SETS>& ubo_buffers,
                                          VkDeviceSize offset,
                                          VkDeviceSize size_per_buffer) const
 {
-    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < MAX_DESCRIPTOR_SETS; i++)
     {
         VkDescriptorBufferInfo bufferInfo {
             .buffer = ubo_buffers[i].m_handle,
@@ -646,9 +646,9 @@ void VulkanManager::DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_
             .dstArrayElement = 0,  // It is possible to update multiple descriptors at once in an array
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo = nullptr,
+            .pImageInfo = VK_NULL_HANDLE,
             .pBufferInfo = &bufferInfo,
-            .pTexelBufferView = nullptr
+            .pTexelBufferView = VK_NULL_HANDLE
         };
         
         vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
@@ -657,7 +657,7 @@ void VulkanManager::DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_
 
 void VulkanManager::DescriptorSetBindImage2D(const Image2DViewer& viewer) const
 {
-    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < MAX_DESCRIPTOR_SETS; i++)
     {
         VkDescriptorImageInfo imageInfo {
             .sampler = viewer.m_sampler,
@@ -673,8 +673,8 @@ void VulkanManager::DescriptorSetBindImage2D(const Image2DViewer& viewer) const
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfo,
-            .pBufferInfo = nullptr,
-            .pTexelBufferView = nullptr
+            .pBufferInfo = VK_NULL_HANDLE,
+            .pTexelBufferView = VK_NULL_HANDLE
         };
 
         vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
@@ -710,7 +710,7 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
         .pSpecializationInfo = nullptr  // this can specify constants inside the shader
     };
 
-    VkPipelineShaderStageCreateInfo shaderStages[2] = {
+    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages {
         vertShaderStageCreateInfo,
         fragShaderStageCreateInfo
     };
@@ -720,7 +720,8 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
     // Dynamic states
     std::array<VkDynamicState, 2> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
+        VK_DYNAMIC_STATE_SCISSOR,
+        // VK_DYNAMIC_STATE_VERTEX_INPUT_EXT
     };
 
     VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo {
@@ -837,12 +838,13 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
 
     // ----- Pipeline Layout -----
 
+    std::array<VkDescriptorSetLayout, 2> layouts = { m_descriptorSetLayout, m_descriptorSetLayout };
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
-        .setLayoutCount = 1,
-        .pSetLayouts = &m_descriptorSetLayout,
+        .setLayoutCount = 2,
+        .pSetLayouts = layouts.data(),
         .pushConstantRangeCount = 0,
         .pPushConstantRanges = nullptr
     };
@@ -856,8 +858,8 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
-        .stageCount = 2,
-        .pStages = shaderStages,
+        .stageCount = static_cast<uint32_t>(shaderStages.size()),
+        .pStages = shaderStages.data(),
         .pVertexInputState = &vertexInputCreateInfo,
         .pInputAssemblyState = &inputAssemblyCreateInfo,
         .pTessellationState = nullptr,
@@ -882,12 +884,12 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
 
 void VulkanManager::DestroyGraphicsPipeline()
 {
-    vkDeviceWaitIdle(m_device);
+    vkDeviceWaitIdle(m_device);  // TODO: Pipeline barrier?
     vkDestroyPipeline(m_device, m_graphicsPipeline, MLC_VULKAN_ALLOCATOR);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, MLC_VULKAN_ALLOCATOR);
 }
 
-MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions()
+MLC_NODISCARD std::vector<const char*> VulkanManager::_GetRequiredExtensions()
 {
     uint32_t glfwExtensionCount;
     const char** glfwExtensions;
@@ -900,6 +902,8 @@ MLC_NODISCARD std::vector<const char*> VulkanManager::_GLFWGetRequiredExtensions
     {
         requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
+    // TODO: Required for Vulkan 1.1 and before
+    // requiredExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 
     return requiredExtensions;
 }
@@ -935,7 +939,7 @@ void VulkanManager::_CreateInstance()
         .apiVersion = VK_API_VERSION_1_3
     };
 
-    std::vector<const char*> requiredExtensions = _GLFWGetRequiredExtensions();
+    std::vector<const char*> requiredExtensions = _GetRequiredExtensions();
 
     uint32_t supportedExtensionCount;
     vkEnumerateInstanceExtensionProperties(nullptr, &supportedExtensionCount, nullptr);
@@ -1128,6 +1132,14 @@ bool VulkanManager::_CheckDeviceExtensionSupport(const VkPhysicalDevice& physica
         requiredDeviceExtensions.erase(extension.extensionName);
     }
 
+    fmt::print("Required Device extensions ({}):\n", DEVICE_EXTENSIONS.size());
+    for (uint32_t i = 0; i < DEVICE_EXTENSIONS.size(); i++)
+    {
+        fmt::print("    {} [{}]\n",
+                   DEVICE_EXTENSIONS[i],
+                   !requiredDeviceExtensions.contains(DEVICE_EXTENSIONS[i]) ? "SUPPORTED" : "UNSUPPORTED");
+    }
+
     return requiredDeviceExtensions.empty();
 }
 
@@ -1226,6 +1238,10 @@ void VulkanManager::_CreateLogicalDevice()
             .pQueuePriorities = &queuePriority
         });
     }
+
+    VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+    };
 
     VkPhysicalDeviceFeatures deviceFeatures {};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
@@ -1601,12 +1617,16 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     std::array<VkDeviceSize, 1> offsets = { 0 }; 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());
     vkCmdBindIndexBuffer(command_buffer, vertexArray->GetIndexBuffer().m_handle, 0, VK_INDEX_TYPE_UINT16);
+
+    const Material& material = m_pipelineConfig.material;
+    // vkDeviceWaitIdle(m_device);
+    // material.GetAlbedo()->Bind();
     vkCmdBindDescriptorSets(command_buffer,
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_pipelineLayout,
                             0,
-                            1,
-                            &m_descriptorSets[m_currentFrameIndex],
+                            2,
+                            m_descriptorSets.data(),
                             0,
                             nullptr);
 

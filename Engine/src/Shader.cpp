@@ -15,4 +15,12 @@ bool Shader::IsUsable() const
            m_fragShaderModule != VK_NULL_HANDLE;
 }
 
+uint32_t Shader::GetActiveStages() const
+{
+    uint32_t activeStages = 2;
+    if (m_geomShaderModule != VK_NULL_HANDLE) activeStages++;
+
+    return activeStages;
+}
+
 MLC_NAMESPACE_END

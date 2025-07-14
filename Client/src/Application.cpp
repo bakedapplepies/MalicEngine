@@ -32,6 +32,11 @@ struct alignas(16) MVP_UBO
     glm::mat4 projection;
 };
 
+struct PushConstants
+{
+};
+static_assert(sizeof(PushConstants) <= Malic::MAX_PUSH_CONSTANTS_SIZE, "PushConstants size larger than 128 bytes.");
+
 Application::Application(Malic::MalicEngine::WindowInfo window_info)
     : m_engine(window_info)
 {}

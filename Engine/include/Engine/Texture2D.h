@@ -20,6 +20,7 @@ public:
     Texture2D& operator=(Texture2D&& other) noexcept;
 
     MLC_NODISCARD bool IsUsable() const;
+    void Bind() const;
 
 private:
     const VulkanManager* m_vulkanManager = nullptr;

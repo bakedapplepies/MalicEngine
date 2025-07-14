@@ -21,6 +21,7 @@ public:
     void SetAlbedo(const Texture2D* texture);
 
     MLC_NODISCARD const Shader* GetShader() const;
+    const Texture2D* GetAlbedo() const;
 
     MLC_NODISCARD bool IsUsable() const;
 

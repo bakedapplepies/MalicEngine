@@ -1,6 +1,5 @@
 #pragma once
 
-#include <fmt/xchar.h>
 #include <fmt/format.h>
 
 // Taken from https://github.com/travisvroman/kohi/blob/main/kohi.core/src/debug/kassert.h
