@@ -110,7 +110,7 @@ public:
     void CreateDescriptorPool(const std::vector<DescriptorInfo>& descriptor_infos);
     void CreateDescriptorSetLayout(const std::vector<DescriptorInfo>& descriptor_infos);
     void CreateDescriptorSets();
-    void DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_FRAMES_IN_FLIGHT>& ubo_buffers,
+    void DescriptorSetBindUBO(const std::array<GPUBuffer, MAX_DESCRIPTOR_SETS>& ubo_buffers,
                               VkDeviceSize offset,
                               VkDeviceSize size_per_buffer) const;
     void DescriptorSetBindImage2D(const Image2DViewer& viewer) const;

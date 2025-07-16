@@ -15,7 +15,7 @@ Texture2D::Texture2D(const VulkanManager* vulkan_manager, const File& file)
     int width, height, channels;
     
 #ifndef _WIN32
-    FILE* f = fopen(file.c_str(), "rb");
+    FILE* f = fopen(file.GetPath(), "rb");
 #else
     std::string s(file.GetPath());
     std::wstring filePathW;

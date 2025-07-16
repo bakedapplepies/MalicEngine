@@ -7,7 +7,7 @@ MLC_NAMESPACE_START
 UniformBuffer::UniformBuffer(const VulkanManager* vulkan_manager, uint32_t binding, VkDeviceSize size)
     : m_vulkanManager(vulkan_manager)
 {
-    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < MAX_DESCRIPTOR_SETS; i++)
     {
         m_vulkanManager->AllocateBuffer(m_buffers[i],
                                         size,
@@ -22,7 +22,7 @@ UniformBuffer::~UniformBuffer()
 {
     if (m_vulkanManager)
     {
-        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        for (uint32_t i = 0; i < MAX_DESCRIPTOR_SETS; i++)
         {
             m_vulkanManager->DeallocateBuffer(m_buffers[i]);
         }

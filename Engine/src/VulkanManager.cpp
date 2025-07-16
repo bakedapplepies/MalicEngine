@@ -1625,7 +1625,7 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_pipelineLayout,
                             0,
-                            2,
+                            m_descriptorSets.size(),
                             m_descriptorSets.data(),
                             0,
                             nullptr);

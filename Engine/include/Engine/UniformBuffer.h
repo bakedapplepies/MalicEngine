@@ -25,8 +25,8 @@ public:
 
 private:
     const VulkanManager* m_vulkanManager;
-    std::array<GPUBuffer, MAX_FRAMES_IN_FLIGHT> m_buffers;
-    std::array<void*, MAX_FRAMES_IN_FLIGHT> m_mappedMemories;
+    std::array<GPUBuffer, MAX_DESCRIPTOR_SETS> m_buffers;
+    std::array<void*, MAX_DESCRIPTOR_SETS> m_mappedMemories;
 };
 
 MLC_NAMESPACE_END
