@@ -1,17 +1,17 @@
 #pragma once
 
-// #include <vector>
+#include <vector>
 
 #include "Engine/core/Defines.h"
 #include "Engine/Material.h"
 
 MLC_NAMESPACE_START
 
-class VertexArray;
 struct PipelineResources
 {
     Material material;
-    const VertexArray* vertexArray = nullptr;
+    std::vector<VkVertexInputBindingDescription> vertexInputBindingDescs;
+    std::vector<VkVertexInputAttributeDescription> vertexInputAttribDescs;
     // alpha blending config
 };
 

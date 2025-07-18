@@ -1,17 +1,13 @@
 #include "Engine/VertexArray.h"
 
-#include <array>
-
 #include "Engine/core/Assert.h"
 
 MLC_NAMESPACE_START
 
 VertexArray::VertexArray(const VulkanManager* vulkan_manager,
-                         uint32_t binding,
                          const std::vector<Vertex>& vertices,
                          const std::vector<uint16_t>& indices)
     : m_vulkanManager(vulkan_manager),
-      m_binding(binding),
       m_verticesCount(static_cast<uint32_t>(vertices.size())),
       m_indicesCount(static_cast<uint32_t>(indices.size()))
 {
@@ -69,14 +65,12 @@ VertexArray::~VertexArray()
 VertexArray::VertexArray(VertexArray&& other) noexcept
 {
     m_vulkanManager = other.m_vulkanManager;
-    m_binding = other.m_binding;
     m_verticesCount = other.m_verticesCount;
     m_indicesCount = other.m_indicesCount;
     m_vertexBuffer = std::move(other.m_vertexBuffer);
     m_indexBuffer = std::move(other.m_indexBuffer);
 
     other.m_vulkanManager = nullptr;
-    other.m_binding = static_cast<uint32_t>(-1);
     other.m_verticesCount = static_cast<uint32_t>(-1);
     other.m_indicesCount = static_cast<uint32_t>(-1);
 }
@@ -84,14 +78,12 @@ VertexArray::VertexArray(VertexArray&& other) noexcept
 VertexArray& VertexArray::operator=(VertexArray&& other) noexcept
 {
     m_vulkanManager = other.m_vulkanManager;
-    m_binding = other.m_binding;
     m_verticesCount = other.m_verticesCount;
     m_indicesCount = other.m_indicesCount;
     m_vertexBuffer = std::move(other.m_vertexBuffer);
     m_indexBuffer = std::move(other.m_indexBuffer);
     
     other.m_vulkanManager = nullptr;
-    other.m_binding = static_cast<uint32_t>(-1);
     other.m_verticesCount = static_cast<uint32_t>(-1);
     other.m_indicesCount = static_cast<uint32_t>(-1);
 
@@ -122,42 +114,41 @@ const GPUBuffer& VertexArray::GetIndexBuffer() const
     return m_indexBuffer;
 }
 
-VkVertexInputBindingDescription VertexArray::GetBindingDescription() const
+std::vector<VkVertexInputBindingDescription> VertexArray::GetBindingDescriptions() const
 {
-    MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
-
-    return VkVertexInputBindingDescription {
-        .binding = m_binding,
-        .stride = sizeof(Vertex),
-        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX  // can be per instance
+    return {
+        VkVertexInputBindingDescription {
+            .binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX  // can be per instance
+        }
     };
 }
 
 // TODO: Custom vertex attributes
-std::array<VkVertexInputAttributeDescription, 3> VertexArray::GetAttribDescriptions() const
+std::vector<VkVertexInputAttributeDescription> VertexArray::GetAttribDescriptions() const
 {
-    MLC_ASSERT(m_vertexBuffer.IsUsable(), "Vertex Array not initialized.");
-
+    auto bindingDescs = GetBindingDescriptions();
     VkVertexInputAttributeDescription positionAttribDesc {
-        .location = 0,
-        .binding = m_binding,
+        .location = VERTEX_ATTRIB_INDEX_POSITION,
+        .binding = bindingDescs[0].binding,
         .format = VK_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, position)
     };
     VkVertexInputAttributeDescription colorAttribDesc {
-        .location = 1,
-        .binding = m_binding,
+        .location = VERTEX_ATTRIB_INDEX_COLOR,
+        .binding = bindingDescs[0].binding,
         .format = VK_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, color)
     };
     VkVertexInputAttributeDescription uvAttribDesc {
-        .location = 2,
-        .binding = m_binding,
+        .location = VERTEX_ATTRIB_INDEX_UV,
+        .binding = bindingDescs[0].binding,
         .format = VK_FORMAT_R32G32_SFLOAT,
         .offset = offsetof(Vertex, uv)
     };
 
-    return std::array<VkVertexInputAttributeDescription, 3> {
+    return {
         positionAttribDesc,
         colorAttribDesc,
         uvAttribDesc

@@ -21,6 +21,7 @@
 #include "Engine/Image2DViewer.h"
 #include "Engine/DescriptorInfo.h"
 #include "Engine/PipelineResources.h"
+#include "Engine/RenderResources.h"
 
 MLC_NAMESPACE_START
 
@@ -67,7 +68,7 @@ public:
     void Init(GLFWwindow* window);
     void ShutDown();
 
-    void Present();
+    void Present(const RenderResources& render_resources);
     void WaitIdle();
     void ResizeFramebuffer();
     MLC_NODISCARD uint32_t GetCurrentFrameInFlight() const;
@@ -203,7 +204,9 @@ private:
 
     void _CreateCommandPools();
     void _CreateCommandBuffers();
-    void _RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index) const;
+    void _RecordCommandBuffer(VkCommandBuffer command_buffer,
+                              uint32_t swch_image_index,
+                              const RenderResources& render_resources) const;
 
     MLC_NODISCARD VkFormat _FindSupportedFormat(const std::vector<VkFormat>& candidates,
                                                 VkImageTiling tiling,

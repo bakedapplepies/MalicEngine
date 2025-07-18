@@ -1,7 +1,6 @@
 #include "Client/Model.h"
 
 #include <filesystem>
-#include <algorithm>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -24,6 +23,8 @@ Model::Model(const Malic::MalicEngine* engine, const char* path)
 
     _GetMaterials(scene, engine);
     _ProcessNode(scene->mRootNode, scene, vertices, indices);
+    m_vertexArray = engine->CreateVertexArray(vertices, indices);
+    m_renderResources.vertexArray = &m_vertexArray;
     // fmt::print("{}\n", glfwGetTime() - time);
 }
 
@@ -43,13 +44,16 @@ void Model::_GetMaterials(const aiScene* scene, const Malic::MalicEngine* engine
         aiMaterial* material = scene->mMaterials[i];
         aiString path;
         
-        aiGetMaterialTexture(material, aiTextureType_DIFFUSE, 0, &path);
-        std::filesystem::path actualPath = "Client/resources/models/vivian";
-        actualPath /= path.C_Str();
-        std::u32string actuallPath = actualPath.u32string();
-        std::replace(actuallPath.begin(), actuallPath.end(), '\\', '/');
-        // fmt::print(u"{}\n", actuallPath.c_str());
-        mlcMaterial.SetAlbedo(resourceManager->GetTexture2D(Malic::File(actuallPath.c_str())));
+        if (aiGetMaterialTexture(material, aiTextureType_DIFFUSE, 0, &path) == aiReturn_SUCCESS)
+        {
+            std::filesystem::path actualPath = "Client/resources/models/vivian";
+            actualPath /= path.C_Str();
+            mlcMaterial.SetAlbedo(resourceManager->GetTexture2D(Malic::File(actualPath.string())));
+        }
+        else
+        {
+            fmt::println("Unable to load materials.");
+        }
     }
 }
 

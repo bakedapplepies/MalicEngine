@@ -121,7 +121,8 @@ void MalicEntry(Malic::MalicEngine* engine)
         4, 6, 7
     };
 
-    myData->vertexArrays.push_back(engine->CreateVertexArray(0, vertices, indices));
+    myData->vertexArrays.push_back(engine->CreateVertexArray(vertices, indices));
+    myData->vertexArrays.push_back(engine->CreateVertexArray(vertices, indices));
     
     Malic::File vertFile("Client/resources/shaders/bin/default_vert.spv");
     Malic::File fragFile("Client/resources/shaders/bin/default_frag.spv");
@@ -150,9 +151,16 @@ void MalicEntry(Malic::MalicEngine* engine)
     Malic::PipelineResources pipelineConfig
     {
         .material = material,
-        .vertexArray = &myData->vertexArrays.at(0)
+        .vertexInputBindingDescs = myData->vertexArrays.at(0).GetBindingDescriptions(),
+        .vertexInputAttribDescs = myData->vertexArrays.at(0).GetAttribDescriptions()
     };
     engine->AssignPipeline(pipelineConfig);
+    engine->AssignRenderList({
+        Malic::RenderResources {
+            .material = material,
+            .vertexArray = &myData->vertexArrays.at(0)
+        }
+    });
 
     myData->uniformBuffer = engine->CreateUBO(0, sizeof(MVP_UBO));
 

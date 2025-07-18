@@ -101,11 +101,10 @@ void* MalicEngine::GetUserPointer() const
     return m_userData;
 }
 
-VertexArray MalicEngine::CreateVertexArray(uint32_t binding,
-                                           const std::vector<Vertex>& vertices,
+VertexArray MalicEngine::CreateVertexArray(const std::vector<Vertex>& vertices,
                                            const std::vector<uint16_t>& indices) const
 {
-    return VertexArray(&m_vulkanManager, binding, vertices, indices);
+    return VertexArray(&m_vulkanManager, vertices, indices);
 }
 
 void MalicEngine::CreateDescriptors(const std::vector<DescriptorInfo>& descriptor_infos)
@@ -121,10 +120,15 @@ UniformBuffer MalicEngine::CreateUBO(uint32_t binding, VkDeviceSize size) const
     return UniformBuffer(&m_vulkanManager, binding, size);
 }
 
-void MalicEngine::AssignPipeline(const Malic::PipelineResources& pipeline_config)
+void MalicEngine::AssignPipeline(const PipelineResources& pipeline_config)
 {
     m_vulkanManager.DestroyGraphicsPipeline();
     m_vulkanManager.CreateGraphicsPipeline(pipeline_config);
+}
+
+void MalicEngine::AssignRenderList(const std::vector<RenderResources>& render_list)
+{
+    m_renderList = render_list;
 }
 
 void MalicEngine::_WindowInit()
@@ -183,7 +187,7 @@ void MalicEngine::_ShutDown()
 
 void MalicEngine::_DrawFrame()
 {
-    m_vulkanManager.Present();
+    m_vulkanManager.Present(m_renderList[0]);
 }
 
 MLC_NAMESPACE_END

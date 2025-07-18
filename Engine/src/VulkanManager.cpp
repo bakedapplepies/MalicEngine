@@ -118,7 +118,7 @@ void VulkanManager::ShutDown()
     MLC_INFO("Vulkan Deinitialization: Success");
 }
 
-void VulkanManager::Present()
+void VulkanManager::Present(const RenderResources& render_resources)
 {
     vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrameIndex], VK_TRUE, UINT64_MAX);
     
@@ -141,7 +141,7 @@ void VulkanManager::Present()
     vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrameIndex]);
 
     vkResetCommandBuffer(m_graphicsCmdBuffers[m_currentFrameIndex], 0);
-    _RecordCommandBuffer(m_graphicsCmdBuffers[m_currentFrameIndex], imageIndex);
+    _RecordCommandBuffer(m_graphicsCmdBuffers[m_currentFrameIndex], imageIndex, render_resources);
 
     std::array<VkSemaphore, 1> waitSemaphores = { m_imageAvailableSemaphores[m_currentFrameIndex] };  // waiting for next image
     std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -559,11 +559,24 @@ void VulkanManager::CreateDescriptorPool(const std::vector<DescriptorInfo>& desc
 {
     std::vector<VkDescriptorPoolSize> poolSizes;
     poolSizes.resize(descriptor_infos.size());
-    for (uint32_t i = 0; i < descriptor_infos.size(); i++)
+    for (uint32_t i = 0; i < descriptor_infos.size(); i++)  // number of descriptor types
     {
+        uint32_t descriptorTypeMaxCount;
+        switch (descriptor_infos[i].type)
+        {
+            case DescriptorTypes::UNIFORM_BUFFER:
+                descriptorTypeMaxCount = MAX_DESCRIPTOR_PER_SET_UNIFORM_BUFFER;
+                break;
+            case DescriptorTypes::COMBINED_IMAGE_SAMPLER:
+                descriptorTypeMaxCount = MAX_DESCRIPTOR_PER_SET_COMBINED_SAMPLER;
+                break;
+            default:
+                MLC_ERROR("Unknown descriptor type.");
+                break;
+        }
         poolSizes[i] = VkDescriptorPoolSize {
             .type = static_cast<VkDescriptorType>(descriptor_infos[i].type),
-            .descriptorCount = MAX_DESCRIPTOR_SETS * 1u  // default 1 descriptor per descriptor set
+            .descriptorCount = MAX_DESCRIPTOR_SETS * descriptorTypeMaxCount
         };
     }
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo {
@@ -687,7 +700,6 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
     
     m_pipelineConfig = pipeline_config;
 
-    const VertexArray* vertexArray = pipeline_config.vertexArray;
     const Shader* shader = pipeline_config.material.GetShader();
 
     VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo {
@@ -742,16 +754,16 @@ void VulkanManager::CreateGraphicsPipeline(const PipelineResources& pipeline_con
 
     // Vertex input
     // TODO
-    VkVertexInputBindingDescription bindingDesc =
-        vertexArray->GetBindingDescription();
-    std::array<VkVertexInputAttributeDescription, 3> attribDescs =
-        vertexArray->GetAttribDescriptions();
+    std::vector<VkVertexInputBindingDescription> bindingDescs =
+        pipeline_config.vertexInputBindingDescs;
+    std::vector<VkVertexInputAttributeDescription> attribDescs =
+        pipeline_config.vertexInputAttribDescs;
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .pNext = VK_NULL_HANDLE,
         .flags = 0,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &bindingDesc,
+        .vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescs.size()),
+        .pVertexBindingDescriptions = bindingDescs.data(),
         .vertexAttributeDescriptionCount = static_cast<uint32_t>(attribDescs.size()),
         .pVertexAttributeDescriptions = attribDescs.data()
     };
@@ -1565,7 +1577,9 @@ void VulkanManager::_CreateCommandBuffers()
     MLC_ASSERT(result == VK_SUCCESS, "Failed to allocate Transfer command buffers.");
 }
 
-void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_t swch_image_index) const
+void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer,
+                                         uint32_t swch_image_index,
+                                         const RenderResources& render_resources) const
 {
     VkCommandBufferBeginInfo beginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1612,7 +1626,7 @@ void VulkanManager::_RecordCommandBuffer(VkCommandBuffer command_buffer, uint32_
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    const VertexArray* vertexArray = m_pipelineConfig.vertexArray;
+    const VertexArray* vertexArray = render_resources.vertexArray;
     std::array<VkBuffer, 1> vertexBuffers = { vertexArray->GetVertexBuffer().m_handle };
     std::array<VkDeviceSize, 1> offsets = { 0 }; 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertexBuffers.data(), offsets.data());

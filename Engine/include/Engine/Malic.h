@@ -46,12 +46,12 @@ public:
     void SetUserPointer(void* data);
     MLC_NODISCARD void* GetUserPointer() const;
 
-    MLC_NODISCARD VertexArray CreateVertexArray(uint32_t binding,
-                                                const std::vector<Vertex>& vertices,
+    MLC_NODISCARD VertexArray CreateVertexArray(const std::vector<Vertex>& vertices,
                                                 const std::vector<uint16_t>& indices) const;
     void CreateDescriptors(const std::vector<DescriptorInfo>& descriptor_infos);
     MLC_NODISCARD UniformBuffer CreateUBO(uint32_t binding, VkDeviceSize size) const;
-    void AssignPipeline(const Malic::PipelineResources& pipeline_config);
+    void AssignPipeline(const PipelineResources& pipeline_config);
+    void AssignRenderList(const std::vector<RenderResources>& render_list);
 
 private:
     const WindowInfo m_windowInfo;
@@ -59,6 +59,7 @@ private:
     VulkanManager m_vulkanManager;
     ResourceManager m_resourceManager;
     GLFWSharedResource m_glfwSharedResource;
+    std::vector<RenderResources> m_renderList;
     void* m_userData;
 
 private:

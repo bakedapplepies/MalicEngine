@@ -22,7 +22,6 @@ class VertexArray
 public:
     VertexArray() = default;
     VertexArray(const VulkanManager* vulkan_manager,
-                uint32_t binding,
                 const std::vector<Vertex>& vertices,
                 const std::vector<uint16_t>& indices);
     ~VertexArray();
@@ -31,8 +30,8 @@ public:
     VertexArray(VertexArray&& other) noexcept;
     VertexArray& operator=(VertexArray&& other) noexcept;
 
-    MLC_NODISCARD VkVertexInputBindingDescription GetBindingDescription() const;
-    MLC_NODISCARD std::array<VkVertexInputAttributeDescription, 3> GetAttribDescriptions() const;
+    MLC_NODISCARD std::vector<VkVertexInputBindingDescription> GetBindingDescriptions() const;
+    MLC_NODISCARD std::vector<VkVertexInputAttributeDescription> GetAttribDescriptions() const;
     MLC_NODISCARD uint32_t GetVerticesCount() const;
     MLC_NODISCARD uint32_t GetIndicesCount() const;
     MLC_NODISCARD const GPUBuffer& GetVertexBuffer() const;
@@ -40,7 +39,6 @@ public:
 
 private:
     const VulkanManager* m_vulkanManager = nullptr;
-    uint32_t m_binding = static_cast<uint32_t>(-1);
     uint32_t m_verticesCount = static_cast<uint32_t>(-1);
     uint32_t m_indicesCount = static_cast<uint32_t>(-1);
     GPUBuffer m_vertexBuffer;
